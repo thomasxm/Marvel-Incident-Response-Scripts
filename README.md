@@ -239,11 +239,22 @@ Monitors running processes by creating baselines and detecting deviations.
 #### Usage
 
 ```bash
-# Create baseline
+# Linux - Create baseline
 ./process_anomaly.sh baseline -o baseline.json
 
-# Scan against baseline
+# Linux - Scan against baseline
 ./process_anomaly.sh scan -b baseline.json
+```
+
+```powershell
+# Windows - Create baseline
+.\process_anomaly.ps1 baseline -OutputFile baseline.json
+
+# Windows - Scan against baseline
+.\process_anomaly.ps1 scan -BaselineFile baseline.json
+
+# Windows - Detect reconnaissance commands
+.\process_anomaly.ps1 recon -Hours 4
 ```
 
 #### Detection Capabilities
@@ -289,11 +300,19 @@ Monitors high-risk directories for unauthorized file changes.
 #### Usage
 
 ```bash
-# Create file baseline
+# Linux - Create file baseline
 ./file_anomaly.sh baseline -o file_baseline.json
 
-# Scan for file anomalies
+# Linux - Scan for file anomalies
 ./file_anomaly.sh scan -b file_baseline.json
+```
+
+```powershell
+# Windows - Create file baseline
+.\file_anomaly.ps1 baseline -OutputFile file_baseline.json
+
+# Windows - Scan for file anomalies
+.\file_anomaly.ps1 scan -BaselineFile file_baseline.json
 ```
 
 #### Detection Capabilities
@@ -303,9 +322,9 @@ Monitors high-risk directories for unauthorized file changes.
 - **Modified Files**: Content changes (hash mismatch)
 - **Suspicious Indicators**:
   - Hidden files (dotfiles)
-  - Executable extensions (`.sh`, `.py`, `.elf`)
-  - Cron persistence locations
-  - SSH key modifications
+  - Executable extensions (`.sh`, `.py`, `.elf`, `.exe`, `.dll`)
+  - Cron/Startup persistence locations
+  - SSH key / credential file modifications
 
 ---
 
@@ -321,17 +340,28 @@ Active threat hunting by searching for IOC patterns in running processes.
 #### Usage
 
 ```bash
-# Search by process name pattern
+# Linux - Search by process name pattern
 ./process_hunter.sh "crypto\|miner\|xmrig"
 
-# Search by PID
+# Linux - Search by PID
 ./process_hunter.sh -p 1234
 
-# Search with PPID filter
-./process_hunter.sh --ppid 1
-
-# Full scan for all suspicious patterns
+# Linux - Full scan for all suspicious patterns
 ./process_hunter.sh --full
+
+# Linux - Kill matching processes
+./process_hunter.sh -k "xmrig\|minerd"
+```
+
+```powershell
+# Windows - Search by pattern
+.\process_hunter.ps1 -Pattern "mimikatz|sekurlsa"
+
+# Windows - Full suspicious process scan
+.\process_hunter.ps1 -ScanSuspicious
+
+# Windows - Terminate matching processes (DANGER)
+.\process_hunter.ps1 -Pattern "cryptominer" -Kill
 ```
 
 #### Built-in Suspicious Patterns
@@ -501,12 +531,15 @@ Python-based scripts with enhanced detection capabilities and SIEM integration.
 | `ir_scripts/process_anomaly.py` | Process baseline and anomaly detection |
 | `ir_scripts/file_anomaly.py` | File system monitoring |
 
-#### Usage
+#### Installation
 
 ```bash
-# Install dependencies
 pip install -r requirements.txt
+```
 
+#### Process Hunter (Python)
+
+```bash
 # Hunt for suspicious processes
 python ir_scripts/process_hunter.py "nc|ncat|netcat"
 
@@ -515,6 +548,35 @@ python ir_scripts/process_hunter.py -c "base64|/dev/tcp"
 
 # Output to JSON for SIEM ingestion
 python ir_scripts/process_hunter.py -o results.json "pattern"
+
+# Kill matching processes
+python ir_scripts/process_hunter.py -k "xmrig|miner"
+```
+
+#### Process Anomaly (Python)
+
+```bash
+# Create baseline
+python ir_scripts/process_anomaly.py baseline -o baseline.json
+
+# Scan for anomalies
+python ir_scripts/process_anomaly.py scan -b baseline.json
+
+# Output to JSON
+python ir_scripts/process_anomaly.py scan -b baseline.json -o results.json
+```
+
+#### File Anomaly (Python)
+
+```bash
+# Create baseline of monitored directories
+python ir_scripts/file_anomaly.py baseline -o file_baseline.json
+
+# Scan for file changes
+python ir_scripts/file_anomaly.py scan -b file_baseline.json
+
+# Output to JSON
+python ir_scripts/file_anomaly.py scan -b file_baseline.json -o results.json
 ```
 
 ---
