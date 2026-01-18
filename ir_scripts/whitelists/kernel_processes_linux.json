@@ -1,0 +1,33 @@
+{
+  "description": "Protected kernel processes that cannot be injected - safe to whitelist",
+  "version": "1.0.0",
+  "last_updated": "2026-01-16",
+  "platform": "linux",
+  "note": "Does NOT include systemd, svchost equivalents which CAN be injection targets",
+  "processes": [
+    {"name": "kthreadd", "description": "Kernel thread daemon (PID 2)"},
+    {"name": "kworker/*", "description": "Kernel worker threads", "pattern": true},
+    {"name": "ksoftirqd/*", "description": "Soft IRQ daemon", "pattern": true},
+    {"name": "kswapd*", "description": "Kernel swap daemon", "pattern": true},
+    {"name": "migration/*", "description": "CPU migration threads", "pattern": true},
+    {"name": "rcu_sched", "description": "RCU scheduler"},
+    {"name": "rcu_bh", "description": "RCU bottom half"},
+    {"name": "watchdog/*", "description": "Watchdog threads", "pattern": true},
+    {"name": "cpuhp/*", "description": "CPU hotplug", "pattern": true},
+    {"name": "kauditd", "description": "Kernel audit daemon"},
+    {"name": "khungtaskd", "description": "Hung task detector"},
+    {"name": "oom_reaper", "description": "OOM killer reaper"},
+    {"name": "writeback", "description": "Writeback thread"},
+    {"name": "kcompactd*", "description": "Memory compaction", "pattern": true},
+    {"name": "khugepaged", "description": "Huge page daemon"},
+    {"name": "kintegrityd", "description": "Integrity check daemon"},
+    {"name": "kblockd", "description": "Block device daemon"},
+    {"name": "kthrotld", "description": "Block throttle daemon"},
+    {"name": "irq/*", "description": "IRQ threads", "pattern": true},
+    {"name": "scsi_*", "description": "SCSI threads", "pattern": true},
+    {"name": "md*_*", "description": "MD RAID threads", "pattern": true},
+    {"name": "edac-poller", "description": "ECC error detection"},
+    {"name": "ipv6_addrconf", "description": "IPv6 address config"},
+    {"name": "netns", "description": "Network namespace"}
+  ]
+}

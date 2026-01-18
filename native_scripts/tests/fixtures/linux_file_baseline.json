@@ -1,0 +1,6 @@
+{"timestamp":"2024-01-15T10:00:00+00:00","hostname":"webserver-prod-01","description":"Clean baseline file state"}
+{"path":"/tmp/php-session-abc123","type":"file","size":128,"modified":"2024-01-15T09:00:00+00:00","hash":"aaaa111122223333444455556666777788889999aaaabbbbccccddddeeeeffff","permissions":"600","owner":"www-data"}
+{"path":"/var/tmp/apt-update.tmp","type":"file","size":256,"modified":"2024-01-15T08:00:00+00:00","hash":"bbbb111122223333444455556666777788889999aaaabbbbccccddddeeeeffff","permissions":"644","owner":"root"}
+{"path":"/etc/cron.d/certbot","type":"file","size":512,"modified":"2024-01-10T00:00:00+00:00","hash":"cccc111122223333444455556666777788889999aaaabbbbccccddddeeeeffff","permissions":"644","owner":"root"}
+{"path":"/var/spool/cron/crontabs/root","type":"file","size":1024,"modified":"2024-01-12T00:00:00+00:00","hash":"dddd111122223333444455556666777788889999aaaabbbbccccddddeeeeffff","permissions":"600","owner":"root"}
+{"path":"/root/.ssh/authorized_keys","type":"file","size":2048,"modified":"2024-01-01T00:00:00+00:00","hash":"eeee111122223333444455556666777788889999aaaabbbbccccddddeeeeffff","permissions":"600","owner":"root"}

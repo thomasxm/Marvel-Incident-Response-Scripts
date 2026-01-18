@@ -1,0 +1,25 @@
+{
+  "description": "Protected kernel/system processes that cannot be injected - safe to whitelist",
+  "version": "1.0.0",
+  "last_updated": "2026-01-16",
+  "platform": "windows",
+  "note": "Does NOT include svchost.exe, lsass.exe which CAN be injection targets",
+  "processes": [
+    {"name": "System", "pid": 4, "description": "NT Kernel & System"},
+    {"name": "Registry", "description": "Registry hive process"},
+    {"name": "Secure System", "description": "Secure kernel"},
+    {"name": "Memory Compression", "description": "Memory compression service"},
+    {"name": "smss.exe", "description": "Session Manager - early boot only"},
+    {"name": "csrss.exe", "description": "Client/Server Runtime - protected"},
+    {"name": "wininit.exe", "description": "Windows Initialization"},
+    {"name": "services.exe", "description": "Service Control Manager"},
+    {"name": "winlogon.exe", "description": "Windows Logon"}
+  ],
+  "suspicious_if_multiple": [
+    "lsass.exe",
+    "csrss.exe",
+    "smss.exe",
+    "services.exe",
+    "wininit.exe"
+  ]
+}

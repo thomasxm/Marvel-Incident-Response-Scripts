@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-01-15T10:00:00",
+  "hostname": "test-host",
+  "platform": "Linux",
+  "processes": [
+    {"pid": 1, "name": "systemd", "exe": "/usr/lib/systemd/systemd", "ppid": 0, "username": "root", "exe_hash": "abc123"},
+    {"pid": 100, "name": "sshd", "exe": "/usr/sbin/sshd", "ppid": 1, "username": "root", "exe_hash": "def456"},
+    {"pid": 200, "name": "nginx", "exe": "/usr/sbin/nginx", "ppid": 1, "username": "www-data", "exe_hash": "ghi789"},
+    {"pid": 300, "name": "postgres", "exe": "/usr/bin/postgres", "ppid": 1, "username": "postgres", "exe_hash": "jkl012"}
+  ]
+}
