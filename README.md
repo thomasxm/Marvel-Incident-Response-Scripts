@@ -1,15 +1,21 @@
-# Native Incident Response & Threat Hunting Toolkit
+# Marvel Incident Response & Threat Hunting Toolkit
 
-[![Author](https://img.shields.io/badge/Author-Medjed-blue.svg)](https://github.com/medjed)
+[![Author](https://img.shields.io/badge/Author-Medjed-blue.svg)](https://github.com/thomasxm)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-green.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg)]()
 [![Bash](https://img.shields.io/badge/Bash-4.0%2B-green.svg)]()
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)]()
 [![MITRE ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-Mapped-red.svg)]()
 
-**Enterprise-grade incident response and threat hunting scripts with zero external dependencies.**
+**Enterprise-grade incident response and threat hunting toolkit for SOC teams.**
 
-Developed by **Medjed** for Security Operations Center (SOC) teams, incident responders, and threat hunters who need reliable, portable tools that work in air-gapped environments without Python, Ruby, or other runtime dependencies.
+A comprehensive collection of cross-platform scripts for:
+- **Native Scripts** - Pure Bash/PowerShell with zero dependencies (air-gap ready)
+- **Python Scripts** - Enhanced detection with SIEM/Elastic integration
+- **Network Isolation** - Interactive firewall management for containment
+
+Developed by **Medjed** for Security Operations Center (SOC) teams, incident responders, and threat hunters.
 
 ---
 
@@ -21,14 +27,16 @@ Developed by **Medjed** for Security Operations Center (SOC) teams, incident res
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
-- [Linux Scripts](#linux-scripts)
-  - [Process Anomaly Detection](#process-anomaly-detection-linux)
-  - [File Anomaly Detection](#file-anomaly-detection-linux)
-  - [Process Hunter](#process-hunter-linux)
-- [Windows Scripts](#windows-scripts)
-  - [Process Anomaly Detection](#process-anomaly-detection-windows)
-  - [File Anomaly Detection](#file-anomaly-detection-windows)
-  - [Process Hunter](#process-hunter-windows)
+- [Native Scripts](#native-scripts)
+  - [Process Anomaly Detection](#process-anomaly-detection)
+  - [File Anomaly Detection](#file-anomaly-detection)
+  - [Persistence Anomaly Detection](#persistence-anomaly-detection)
+  - [Process Hunter](#process-hunter)
+- [Network Isolation](#network-isolation)
+  - [Linux (iptables)](#linux-iptables)
+  - [Linux (UFW)](#linux-ufw)
+  - [Windows Firewall](#windows-firewall)
+- [Python IR Scripts](#python-ir-scripts)
 - [MITRE ATT&CK Coverage](#mitre-attck-coverage)
 - [Use Cases](#use-cases)
 - [Testing](#testing)
@@ -40,15 +48,28 @@ Developed by **Medjed** for Security Operations Center (SOC) teams, incident res
 
 ## Overview
 
-The **Native IR Toolkit** provides pure Bash (Linux) and pure PowerShell (Windows) scripts for:
+The **Marvel IR Toolkit** provides a comprehensive set of tools for incident response and threat hunting:
 
+### Native Scripts (Zero Dependencies)
+Pure Bash (Linux) and PowerShell (Windows) scripts that work on fresh OS installs:
 - **Baseline Creation**: Capture known-good system state for later comparison
-- **Anomaly Detection**: Identify new, missing, or modified processes and files
+- **Anomaly Detection**: Identify new, missing, or modified processes, files, and persistence mechanisms
 - **Reconnaissance Detection**: Detect enumeration commands with suspicious parent processes
 - **Threat Hunting**: Search for indicators of compromise using pattern matching
 
+### Network Isolation Tools
+Interactive firewall management for rapid containment during incidents:
+- **iptables/UFW (Linux)**: Block IPs, ports, or fully isolate compromised systems
+- **Windows Firewall**: Equivalent functionality for Windows environments
+- **Emergency Isolation**: One-click network containment
+
+### Python Scripts (SIEM Integration)
+Enhanced detection capabilities with Elastic/Splunk integration:
+- Process hunting with psutil
+- Extensible detection framework
+- JSON output for SIEM ingestion
+
 All scripts are designed for **enterprise deployment** with:
-- Zero external dependencies (no Python, no compiled binaries)
 - Colored terminal output for rapid triage
 - JSON output for SIEM integration
 - MITRE ATT&CK technique mapping
@@ -60,9 +81,11 @@ All scripts are designed for **enterprise deployment** with:
 
 | Feature | Description |
 |---------|-------------|
-| **Zero Dependencies** | Pure Bash/PowerShell - works on fresh OS installs |
+| **Zero Dependencies** | Native scripts work on fresh OS installs (Bash/PowerShell only) |
 | **Baseline Comparison** | Create and compare system state over time |
 | **Hash Verification** | SHA256 hashing for executable integrity checking |
+| **Persistence Detection** | Monitor cron, systemd, Run keys, scheduled tasks, and 20+ persistence mechanisms |
+| **Network Isolation** | Interactive firewall tools for rapid containment (iptables, UFW, Windows Firewall) |
 | **Recon Detection** | Identify reconnaissance commands with risk scoring |
 | **Parent-Child Analysis** | Detect suspicious process relationships |
 | **MITRE ATT&CK Mapping** | All detections mapped to ATT&CK techniques |
@@ -76,35 +99,57 @@ All scripts are designed for **enterprise deployment** with:
 ## Architecture
 
 ```
-native_scripts/
-├── linux/                      # Bash scripts for Linux systems
-│   ├── process_anomaly.sh      # Process baseline and anomaly detection
-│   ├── file_anomaly.sh         # File system monitoring
-│   └── process_hunter.sh       # IOC-based process hunting
-├── windows/                    # PowerShell scripts for Windows systems
-│   ├── process_anomaly.ps1     # Process baseline, anomaly, and recon detection
-│   ├── file_anomaly.ps1        # File system monitoring
-│   └── process_hunter.ps1      # IOC-based process hunting
-└── tests/                      # Comprehensive test suite
-    ├── bash/                   # Bash unit and integration tests
-    ├── powershell/             # PowerShell tests
-    └── fixtures/               # Synthetic test data with attack scenarios
+marvel-ir-toolkit/
+├── native_scripts/                 # Zero-dependency scripts
+│   ├── linux/                      # Bash scripts for Linux
+│   │   ├── process_anomaly.sh      # Process baseline and anomaly detection
+│   │   ├── file_anomaly.sh         # File system monitoring
+│   │   ├── persistence_anomaly.sh  # Persistence mechanism detection
+│   │   └── process_hunter.sh       # IOC-based process hunting
+│   ├── windows/                    # PowerShell scripts for Windows
+│   │   ├── process_anomaly.ps1     # Process baseline, anomaly, and recon detection
+│   │   ├── file_anomaly.ps1        # File system monitoring
+│   │   ├── persistence_anomaly.ps1 # Persistence mechanism detection
+│   │   └── process_hunter.ps1      # IOC-based process hunting
+│   └── tests/                      # Comprehensive test suite
+│
+├── network_isolation/              # Firewall management tools
+│   ├── linux/
+│   │   ├── network_isolate_iptables.sh  # iptables-based isolation
+│   │   └── network_isolate_ufw.sh       # UFW-based isolation
+│   └── windows/
+│       └── network_isolate.ps1          # Windows Firewall management
+│
+├── ir_scripts/                     # Python-based IR scripts
+│   ├── process_hunter.py           # Advanced process hunting
+│   ├── process_anomaly.py          # Process anomaly detection
+│   ├── file_anomaly.py             # File anomaly detection
+│   └── utils/                      # Shared utilities
+│
+└── tests/                          # Python test suite
 ```
 
 ---
 
 ## Requirements
 
-### Linux
+### Native Scripts (Zero Dependencies)
+
+#### Linux
 - Bash 4.0 or later
 - Standard Unix utilities: `find`, `stat`, `sha256sum`, `ps`, `grep`, `awk`
+- iptables or ufw (for network isolation)
 - Root/sudo access recommended for full process visibility
 
-### Windows
+#### Windows
 - PowerShell 5.1 (built into Windows 10/11, Server 2016+)
 - PowerShell Core 7.x (optional, for cross-platform)
 - Administrator privileges recommended for full WMI access
 - Security Event Log access for historical recon detection (Event ID 4688)
+
+### Python Scripts (Optional)
+- Python 3.8+
+- psutil (`pip install psutil`)
 
 ---
 
@@ -112,53 +157,75 @@ native_scripts/
 
 ### Option 1: Git Clone
 ```bash
-git clone https://github.com/medjed/native-ir-toolkit.git
-cd native-ir-toolkit/native_scripts
+git clone https://github.com/thomasxm/Marvel-Incident-Response-Scripts.git
+cd Marvel-Incident-Response-Scripts
 ```
 
 ### Option 2: Direct Download
 ```bash
 # Linux
-curl -LO https://github.com/medjed/native-ir-toolkit/archive/main.zip
+curl -LO https://github.com/thomasxm/Marvel-Incident-Response-Scripts/archive/main.zip
 unzip main.zip
 
 # Windows (PowerShell)
-Invoke-WebRequest -Uri "https://github.com/medjed/native-ir-toolkit/archive/main.zip" -OutFile main.zip
+Invoke-WebRequest -Uri "https://github.com/thomasxm/Marvel-Incident-Response-Scripts/archive/main.zip" -OutFile main.zip
 Expand-Archive main.zip -DestinationPath .
 ```
 
 ### Option 3: Air-Gapped Deployment
-Copy the `native_scripts/` directory to removable media for deployment to isolated systems.
+Copy the `native_scripts/` and `network_isolation/` directories to removable media for deployment to isolated systems.
+
+### Python Scripts (Optional)
+```bash
+pip install -r requirements.txt
+```
 
 ---
 
 ## Quick Start
 
-### Linux - Detect Process Anomalies
+### Detect Process Anomalies
 ```bash
-# Create baseline on clean system
-sudo ./linux/process_anomaly.sh baseline -o /secure/baseline.json
+# Linux - Create baseline on clean system
+sudo ./native_scripts/linux/process_anomaly.sh baseline -o /secure/baseline.json
+sudo ./native_scripts/linux/process_anomaly.sh scan -b /secure/baseline.json
 
-# Later, scan for anomalies
-sudo ./linux/process_anomaly.sh scan -b /secure/baseline.json
+# Windows - Scan for recon commands
+.\native_scripts\windows\process_anomaly.ps1 recon -Hours 4
 ```
 
-### Windows - Detect Reconnaissance Activity
-```powershell
-# Scan for recon commands in the past 4 hours
-.\windows\process_anomaly.ps1 recon -Hours 4
+### Detect Persistence Mechanisms
+```bash
+# Linux - Scan for cron, systemd, SSH keys, etc.
+sudo ./native_scripts/linux/persistence_anomaly.sh baseline -o baseline.json
+sudo ./native_scripts/linux/persistence_anomaly.sh scan -b baseline.json
 
-# With specific time window
-.\windows\process_anomaly.ps1 recon -Hours 24
+# Windows - Scan Run keys, scheduled tasks, services, etc.
+.\native_scripts\windows\persistence_anomaly.ps1 baseline -OutputFile baseline.json
+.\native_scripts\windows\persistence_anomaly.ps1 scan -BaselineFile baseline.json
+```
+
+### Emergency Network Isolation
+```bash
+# Linux - Launch interactive isolation menu
+sudo ./network_isolation/linux/network_isolate_iptables.sh
+
+# Windows - Launch interactive isolation menu
+.\network_isolation\windows\network_isolate.ps1
 ```
 
 ---
 
-## Linux Scripts
+## Native Scripts
 
-### Process Anomaly Detection (Linux)
+**Zero external dependencies** - no Python, no compiled binaries, no package managers required. Pure Bash (Linux) and PowerShell (Windows) scripts that work on fresh OS installs and in air-gapped environments.
 
-**Script:** `linux/process_anomaly.sh`
+### Process Anomaly Detection
+
+| Platform | Script |
+|----------|--------|
+| Linux | `native_scripts/linux/process_anomaly.sh` |
+| Windows | `native_scripts/windows/process_anomaly.ps1` |
 
 Monitors running processes by creating baselines and detecting deviations.
 
@@ -201,9 +268,12 @@ Monitors running processes by creating baselines and detecting deviations.
 
 ---
 
-### File Anomaly Detection (Linux)
+### File Anomaly Detection
 
-**Script:** `linux/file_anomaly.sh`
+| Platform | Script |
+|----------|--------|
+| Linux | `native_scripts/linux/file_anomaly.sh` |
+| Windows | `native_scripts/windows/file_anomaly.ps1` |
 
 Monitors high-risk directories for unauthorized file changes.
 
@@ -239,9 +309,12 @@ Monitors high-risk directories for unauthorized file changes.
 
 ---
 
-### Process Hunter (Linux)
+### Process Hunter
 
-**Script:** `linux/process_hunter.sh`
+| Platform | Script |
+|----------|--------|
+| Linux | `native_scripts/linux/process_hunter.sh` |
+| Windows | `native_scripts/windows/process_hunter.ps1` |
 
 Active threat hunting by searching for IOC patterns in running processes.
 
@@ -271,173 +344,178 @@ Active threat hunting by searching for IOC patterns in running processes.
 
 ---
 
-## Windows Scripts
+### Persistence Anomaly Detection
 
-### Process Anomaly Detection (Windows)
+| Platform | Script |
+|----------|--------|
+| Linux | `native_scripts/linux/persistence_anomaly.sh` |
+| Windows | `native_scripts/windows/persistence_anomaly.ps1` |
 
-**Script:** `windows/process_anomaly.ps1`
+Comprehensive persistence mechanism monitoring with multi-level scanning.
 
-Comprehensive process monitoring with baseline comparison and reconnaissance detection.
+#### Scan Levels
 
-#### Modes
+| Level | Description | Categories |
+|-------|-------------|------------|
+| 1 | Essential | Cron, systemd services, Run keys, scheduled tasks, startup folders |
+| 2 | Comprehensive | + SSH keys, shell configs, Winlogon, AppInit DLLs, COM hijacks |
+| 3 | Exhaustive | + Kernel modules, udev rules, WMI subscriptions, LSA packages |
 
-| Mode | Description |
-|------|-------------|
-| `baseline` | Capture current process state to JSON |
-| `scan` | Compare current state against baseline |
-| `recon` | Detect reconnaissance commands (NEW) |
+#### Linux Persistence Categories
 
-#### Baseline and Scan
+| Category | MITRE Technique | Description |
+|----------|-----------------|-------------|
+| `cron` | T1053.003 | Cron Jobs |
+| `systemd-services` | T1543.002 | Systemd Services |
+| `systemd-timers` | T1053.006 | Systemd Timers |
+| `shell-rc` | T1546.004 | Shell Configuration (.bashrc, .profile) |
+| `ssh-keys` | T1098.004 | SSH Authorized Keys |
+| `init-scripts` | T1037.004 | Init Scripts |
+| `ld-preload` | T1574.006 | LD_PRELOAD Hijacking |
+| `kernel-modules` | T1547.006 | Kernel Modules |
+| `udev-rules` | T1546.012 | Udev Rules |
 
-```powershell
-# Create baseline
-.\process_anomaly.ps1 baseline -OutputFile C:\Secure\baseline.json
+#### Windows Persistence Categories
 
-# Scan against baseline
-.\process_anomaly.ps1 scan -BaselineFile C:\Secure\baseline.json
-```
+| Category | MITRE Technique | Description |
+|----------|-----------------|-------------|
+| `run-keys` | T1547.001 | Registry Run Keys |
+| `scheduled-tasks` | T1053.005 | Scheduled Tasks |
+| `services` | T1543.003 | Windows Services |
+| `startup-folder` | T1547.001 | Startup Folder |
+| `winlogon` | T1547.004 | Winlogon Helper DLL |
+| `appinit-dlls` | T1546.010 | AppInit DLLs |
+| `image-hijacks` | T1546.012 | Image File Execution Options |
+| `wmi-subscriptions` | T1546.003 | WMI Event Subscription |
+| `com-hijacks` | T1546.015 | COM Object Hijacking |
 
-#### Reconnaissance Detection Mode
+#### Usage
 
-Detects enumeration commands commonly used by attackers during the discovery phase, with special attention to suspicious parent-child process relationships.
+```bash
+# Linux - Create baseline and scan
+./persistence_anomaly.sh baseline -o baseline.json
+./persistence_anomaly.sh scan -b baseline.json -o results.json
 
-```powershell
-# Scan past 4 hours (default)
-.\process_anomaly.ps1 recon
-
-# Scan past 24 hours
-.\process_anomaly.ps1 recon -Hours 24
-```
-
-##### Detected Reconnaissance Commands
-
-| Command | MITRE Technique | Description |
-|---------|-----------------|-------------|
-| `hostname` | T1082 | System hostname discovery |
-| `systeminfo` | T1082 | Detailed system information |
-| `ipconfig` | T1016 | Network configuration |
-| `netstat` | T1016 | Network connections |
-| `whoami` | T1033 | Current user identity |
-| `quser` | T1033 | Logged-on users |
-| `qwinsta` | T1033 | Remote Desktop sessions |
-| `tasklist` | T1057 | Running processes |
-| `sc query/queryex/qc` | T1007 | Service enumeration |
-| `net` | T1087 | User/network enumeration |
-| `dsquery` | T1087 | Active Directory queries |
-| `nltest` | T1087 | Domain trust enumeration |
-| `cmd` | T1059.003 | Windows Command Shell |
-| `powershell` | T1059.001 | PowerShell execution |
-
-##### Suspicious Parent Process Detection
-
-When reconnaissance commands are spawned from system-level processes, they receive elevated risk scores:
-
-| Risk Level | Visual | Parent Processes | Interpretation |
-|------------|--------|------------------|----------------|
-| **CRITICAL** | White on Red | `services.exe`, `lsass.exe`, `csrss.exe`, `smss.exe` | Almost certainly malicious |
-| **HIGH** | Red | `svchost.exe`, `winlogon.exe`, `spoolsv.exe`, `wsmprovhost.exe` | Highly suspicious |
-| **MEDIUM** | Yellow | `WmiPrvSE.exe`, `dllhost.exe`, `taskhost.exe` | Unusual, investigate |
-| **INFO** | Cyan | `explorer.exe`, `cmd.exe`, etc. | Likely legitimate admin activity |
-
-##### Sample Recon Output
-
-```
-════════════════════════════════════════════════════════════
-  CRITICAL RISK - Suspicious Parent Process Spawning Recon
-════════════════════════════════════════════════════════════
-
-[CRITICAL] ipconfig spawned by services (PID: 4521)
-    MITRE ATT&CK: T1016 - Network configuration discovery
-    Time:       2024-01-15 14:30:22
-    User:       NT AUTHORITY\SYSTEM
-    Command:    ipconfig /all
-    Parent:     services (PID: 684)
-    Parent Path: C:\Windows\System32\services.exe
-    Risk:       Service Control Manager - should not spawn recon
-
-════════════════════════════════════════════════════════════
-  Reconnaissance Scan Summary
-════════════════════════════════════════════════════════════
-Time Window:           Past 4 hours
-Total Recon Commands:  15
-
-[!!!] CRITICAL findings: 2
-[!!]  HIGH findings:     3
-[!]   MEDIUM findings:   1
-[*]   INFO findings:     9
-
-========================================
-  ALERT: 6 suspicious parent-child relationships detected!
-  Review CRITICAL and HIGH findings immediately.
-========================================
+# Windows - Scan with level 2 (comprehensive)
+.\persistence_anomaly.ps1 baseline -Level 2 -OutputFile baseline.json
+.\persistence_anomaly.ps1 scan -BaselineFile baseline.json -Level 2
 ```
 
 ---
 
-### File Anomaly Detection (Windows)
+## Network Isolation
 
-**Script:** `windows/file_anomaly.ps1`
+Interactive firewall management tools for rapid network containment during incident response.
 
-Monitors high-risk Windows directories for unauthorized changes.
+### Linux (iptables)
 
-#### Monitored Directories
+**Script:** `network_isolation/linux/network_isolate_iptables.sh`
 
-| Directory | Risk Category |
-|-----------|--------------|
-| `%TEMP%`, `%TMP%` | Temporary file locations |
-| `C:\Users\Public` | World-writable user folder |
-| `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup` | User persistence |
-| `C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup` | System persistence |
-| `%USERPROFILE%` | User home directories |
+Interactive menu-driven iptables management for incident response.
+
+#### Features
+
+| Feature | Description |
+|---------|-------------|
+| View Rules | Show current iptables rules with line numbers |
+| Block/Allow Ports | Block or allow specific ports (TCP/UDP) |
+| Block/Allow IPs | Block or allow specific IP addresses or CIDR ranges |
+| Emergency Isolation | Block all incoming or outgoing traffic |
+| Interface Control | Take down or bring up network interfaces |
+| Reset | Reset iptables to allow all traffic |
+
+#### Usage
+
+```bash
+sudo ./network_isolation/linux/network_isolate_iptables.sh
+```
+
+### Linux (UFW)
+
+**Script:** `network_isolation/linux/network_isolate_ufw.sh`
+
+UFW-based alternative for systems using Uncomplicated Firewall.
+
+#### Usage
+
+```bash
+sudo ./network_isolation/linux/network_isolate_ufw.sh
+```
+
+### Windows Firewall
+
+**Script:** `network_isolation/windows/network_isolate.ps1`
+
+Interactive Windows Firewall management with netsh.
+
+#### Features
+
+| Feature | Description |
+|---------|-------------|
+| Firewall Status | View all profile states and settings |
+| Block/Allow Ports | Create inbound/outbound port rules |
+| Block/Allow IPs | Block or allow specific IP addresses |
+| Emergency Isolation | Block all inbound/outbound (emergency containment) |
+| Adapter Control | Disable/enable network adapters |
+| Reset | Reset firewall to Windows defaults |
 
 #### Usage
 
 ```powershell
-# Create baseline
-.\file_anomaly.ps1 baseline -OutputFile file_baseline.json
-
-# Scan for anomalies
-.\file_anomaly.ps1 scan -BaselineFile file_baseline.json
+# Run as Administrator
+.\network_isolation\windows\network_isolate.ps1
 ```
 
-#### Detection Capabilities
+#### Sample Menu
 
-- New files in monitored directories
-- Modified files (hash changes)
-- Deleted files (evidence tampering)
-- Suspicious indicators:
-  - Double extensions (e.g., `document.pdf.exe`)
-  - Hidden files
-  - Executable extensions in temp directories
+```
+  ================================================================
+       Windows Network Isolation Script - Incident Response
+  ================================================================
+
+  FIREWALL STATUS
+  [1] Show firewall status and profiles
+  [2] Show open ports and connections
+
+  BLOCK RULES
+  [5] Block a specific port (inbound)
+  [6] Block a specific port (outbound)
+  [7] Block a specific IP address
+
+  EMERGENCY ISOLATION
+  [11] Block all inbound (emergency isolation)
+  [12] Block all outbound (emergency isolation)
+```
 
 ---
 
-### Process Hunter (Windows)
+## Python IR Scripts
 
-**Script:** `windows/process_hunter.ps1`
+Python-based scripts with enhanced detection capabilities and SIEM integration.
 
-Active threat hunting with IOC pattern matching.
+**Requirements:** Python 3.8+, psutil
+
+| Script | Description |
+|--------|-------------|
+| `ir_scripts/process_hunter.py` | Advanced process hunting with regex patterns |
+| `ir_scripts/process_anomaly.py` | Process baseline and anomaly detection |
+| `ir_scripts/file_anomaly.py` | File system monitoring |
 
 #### Usage
 
-```powershell
-# Search by pattern
-.\process_hunter.ps1 -Pattern "mimikatz|sekurlsa"
+```bash
+# Install dependencies
+pip install -r requirements.txt
 
-# Full suspicious process scan
-.\process_hunter.ps1 -ScanSuspicious
+# Hunt for suspicious processes
+python ir_scripts/process_hunter.py "nc|ncat|netcat"
 
-# Terminate matching processes (DANGER)
-.\process_hunter.ps1 -Pattern "cryptominer" -Kill
+# Search in command lines
+python ir_scripts/process_hunter.py -c "base64|/dev/tcp"
+
+# Output to JSON for SIEM ingestion
+python ir_scripts/process_hunter.py -o results.json "pattern"
 ```
-
-#### Built-in Detection Patterns
-
-- **Encoded Commands**: `-enc`, `-encodedcommand`, `FromBase64String`
-- **Download Cradles**: `DownloadString`, `WebClient`, `Invoke-WebRequest`
-- **Credential Tools**: `mimikatz`, `sekurlsa`, `lsadump`
-- **LOLBins**: `certutil -urlcache`, `mshta`, `regsvr32 /s /i`
-- **Lateral Movement**: `psexec`, `wmiexec`, `smbexec`
 
 ---
 
@@ -469,8 +547,16 @@ This toolkit provides detection coverage for the following ATT&CK techniques:
 
 | Technique | ID | Scripts |
 |-----------|----|---------|
-| Scheduled Task/Job: Cron | T1053.003 | `file_anomaly.sh` |
-| Boot or Logon Autostart Execution | T1547 | `file_anomaly.ps1` |
+| Scheduled Task/Job: Cron | T1053.003 | `persistence_anomaly.sh` |
+| Scheduled Task/Job: Windows Task Scheduler | T1053.005 | `persistence_anomaly.ps1` |
+| Systemd Services | T1543.002 | `persistence_anomaly.sh` |
+| Windows Services | T1543.003 | `persistence_anomaly.ps1` |
+| Registry Run Keys | T1547.001 | `persistence_anomaly.ps1` |
+| Winlogon Helper DLL | T1547.004 | `persistence_anomaly.ps1` |
+| SSH Authorized Keys | T1098.004 | `persistence_anomaly.sh` |
+| AppInit DLLs | T1546.010 | `persistence_anomaly.ps1` |
+| WMI Event Subscription | T1546.003 | `persistence_anomaly.ps1` |
+| Boot or Logon Autostart Execution | T1547 | `file_anomaly.*` |
 | Server Software Component: Web Shell | T1505.003 | `process_hunter.*` |
 
 ### Defense Evasion (TA0005)
@@ -538,6 +624,29 @@ This toolkit provides detection coverage for the following ATT&CK techniques:
 ./file_anomaly.sh scan -b /compliance/golden_image.json
 ```
 
+### 6. Emergency Network Containment
+
+```bash
+# Linux - Immediately isolate compromised host
+sudo ./network_isolation/linux/network_isolate_iptables.sh
+# Select option 7 or 8 for emergency isolation
+
+# Windows - Isolate while preserving forensic access
+.\network_isolation\windows\network_isolate.ps1
+# Block all outbound, allow specific forensic IP
+```
+
+### 7. Persistence Mechanism Audit
+
+```bash
+# Linux - Full persistence scan
+./native_scripts/linux/persistence_anomaly.sh baseline -o baseline.json
+./native_scripts/linux/persistence_anomaly.sh scan -b baseline.json --level 3
+
+# Windows - Scan all persistence locations
+.\native_scripts\windows\persistence_anomaly.ps1 scan -Level 3
+```
+
 ---
 
 ## Testing
@@ -547,21 +656,29 @@ The toolkit includes a comprehensive test suite with unit tests, integration tes
 ### Run All Tests
 
 ```bash
-cd tests
+# Native script tests
+cd native_scripts/tests
 ./run_all_tests.sh
+
+# Python tests
+cd tests
+pytest
 ```
 
 ### Run Specific Test Suites
 
 ```bash
-# Bash unit tests (39 tests)
-./bash/test_runner.sh
+# Bash unit tests
+./native_scripts/tests/bash/test_runner.sh
 
-# Bash scenario tests (28 tests)
-./bash/test_scenarios.sh
+# Bash scenario tests
+./native_scripts/tests/bash/test_scenarios.sh
 
-# PowerShell tests (60+ tests)
-pwsh -File ./powershell/Test-AllScripts.ps1
+# PowerShell tests
+pwsh -File ./native_scripts/tests/powershell/Test-AllScripts.ps1
+
+# Python tests
+pytest tests/
 ```
 
 ### Test Fixtures
@@ -587,7 +704,8 @@ Contributions are welcome! Please follow these guidelines:
 
 - **Bash**: Follow [Google Shell Style Guide](https://google.github.io/styleguide/shellguide.html)
 - **PowerShell**: Follow [PowerShell Best Practices](https://poshcode.gitbook.io/powershell-practice-and-style/)
-- **Zero Dependencies**: No external tools, packages, or binaries
+- **Python**: Follow PEP 8, use type hints
+- **Native Scripts**: Zero external dependencies (Bash/PowerShell only)
 - **MITRE Mapping**: All detections should reference ATT&CK techniques
 
 ### Submitting Changes
@@ -612,7 +730,7 @@ Please include:
 
 MIT License
 
-Copyright (c) 2024 Medjed
+Copyright (c) 2026 Medjed
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
