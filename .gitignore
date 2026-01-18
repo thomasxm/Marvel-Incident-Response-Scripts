@@ -8,3 +8,4 @@ dist/
 build/
 .eggs/
 docs/plans/
+native_scripts/docs/plans/
