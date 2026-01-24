@@ -833,5 +833,3 @@ Developed for the security community to enable effective incident response and t
 - SOC analysts and incident responders who provided feedback
 
 ---
-
-*"The best incident response tool is the one that works when you need it."* — Medjed
