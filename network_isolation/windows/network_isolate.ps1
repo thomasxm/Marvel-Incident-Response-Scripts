@@ -5,15 +5,125 @@
 
 .DESCRIPTION
     Interactive PowerShell script for network isolation using Windows Firewall.
-    Provides comprehensive firewall management and network adapter control.
+    Provides comprehensive firewall management, network adapter control,
+    advanced access control, and service restrictions.
+
+.PARAMETER AllowPortFrom
+    Allow inbound port from specific IP (use with -Port and -FromIP)
+
+.PARAMETER BlockPortExceptFrom
+    Block inbound port except from specific IPs (use with -Port and -FromIP)
+
+.PARAMETER AllowPortTo
+    Allow outbound to port on specific IP (use with -Port and -ToIP)
+
+.PARAMETER BlockPortExceptTo
+    Block outbound port except to specific IPs (use with -Port and -ToIP)
+
+.PARAMETER BlockPortIn
+    Block inbound port (TCP+UDP)
+
+.PARAMETER BlockPortOut
+    Block outbound port (TCP+UDP)
+
+.PARAMETER RestrictDNS
+    Restrict outbound DNS to specified resolvers (comma-separated IPs)
+
+.PARAMETER RestrictSMTP
+    Restrict outbound SMTP to specified mail servers (comma-separated IPs)
+
+.PARAMETER EnableLogging
+    Enable Windows Firewall logging
+
+.PARAMETER DisableLogging
+    Disable Windows Firewall logging
+
+.PARAMETER Port
+    Port number for port-based rules
+
+.PARAMETER FromIP
+    Source IP address(es) for inbound rules (comma-separated)
+
+.PARAMETER ToIP
+    Destination IP address(es) for outbound rules (comma-separated)
+
+.EXAMPLE
+    .\network_isolate.ps1
+    Runs in interactive mode
+
+.EXAMPLE
+    .\network_isolate.ps1 -AllowPortFrom -Port 22 -FromIP 10.1.2.3
+    Allow SSH from management IP
+
+.EXAMPLE
+    .\network_isolate.ps1 -BlockPortExceptFrom -Port 22 -FromIP "10.1.2.3,10.1.2.4"
+    Allow SSH only from specified IPs
+
+.EXAMPLE
+    .\network_isolate.ps1 -RestrictDNS "8.8.8.8,8.8.4.4,1.1.1.1"
+    Restrict DNS to Google and Cloudflare resolvers
+
+.EXAMPLE
+    .\network_isolate.ps1 -BlockPortOut 445 -BlockPortOut 3389
+    Block outbound SMB and RDP
 
 .NOTES
     Author: IR Toolkit
-    Version: 1.0
+    Version: 2.0
     Requires: Administrator privileges
 #>
 
+[CmdletBinding(DefaultParameterSetName = 'Interactive')]
+param(
+    [Parameter(ParameterSetName = 'AllowPortFrom')]
+    [switch]$AllowPortFrom,
+
+    [Parameter(ParameterSetName = 'BlockPortExceptFrom')]
+    [switch]$BlockPortExceptFrom,
+
+    [Parameter(ParameterSetName = 'AllowPortTo')]
+    [switch]$AllowPortTo,
+
+    [Parameter(ParameterSetName = 'BlockPortExceptTo')]
+    [switch]$BlockPortExceptTo,
+
+    [Parameter(ParameterSetName = 'BlockPortIn')]
+    [switch]$BlockPortIn,
+
+    [Parameter(ParameterSetName = 'BlockPortOut')]
+    [switch]$BlockPortOut,
+
+    [Parameter(ParameterSetName = 'RestrictDNS')]
+    [string]$RestrictDNS,
+
+    [Parameter(ParameterSetName = 'RestrictSMTP')]
+    [string]$RestrictSMTP,
+
+    [Parameter(ParameterSetName = 'EnableLogging')]
+    [switch]$EnableLogging,
+
+    [Parameter(ParameterSetName = 'DisableLogging')]
+    [switch]$DisableLogging,
+
+    [Parameter(ParameterSetName = 'AllowPortFrom')]
+    [Parameter(ParameterSetName = 'BlockPortExceptFrom')]
+    [Parameter(ParameterSetName = 'AllowPortTo')]
+    [Parameter(ParameterSetName = 'BlockPortExceptTo')]
+    [Parameter(ParameterSetName = 'BlockPortIn')]
+    [Parameter(ParameterSetName = 'BlockPortOut')]
+    [int]$Port,
+
+    [Parameter(ParameterSetName = 'AllowPortFrom')]
+    [Parameter(ParameterSetName = 'BlockPortExceptFrom')]
+    [string]$FromIP,
+
+    [Parameter(ParameterSetName = 'AllowPortTo')]
+    [Parameter(ParameterSetName = 'BlockPortExceptTo')]
+    [string]$ToIP
+)
+
 $ErrorActionPreference = "Stop"
+$script:InteractiveMode = $true
 
 # ============================================================================
 # Color-coded output functions
@@ -82,8 +192,18 @@ function Test-ValidIP {
         return $false
     }
 
+    # Handle CIDR notation
+    $ipPart = $IP
+    if ($IP -match "^(.+)/(\d+)$") {
+        $ipPart = $Matches[1]
+        $cidr = [int]$Matches[2]
+        if ($cidr -lt 0 -or $cidr -gt 32) {
+            return $false
+        }
+    }
+
     try {
-        $null = [System.Net.IPAddress]::Parse($IP)
+        $null = [System.Net.IPAddress]::Parse($ipPart)
         return $true
     }
     catch {
@@ -91,11 +211,33 @@ function Test-ValidIP {
     }
 }
 
+function Test-ValidIPList {
+    param([string]$IPList)
+
+    if ([string]::IsNullOrWhiteSpace($IPList)) {
+        return $false
+    }
+
+    $ips = $IPList -split ","
+    foreach ($ip in $ips) {
+        $ip = $ip.Trim()
+        if (-not (Test-ValidIP $ip)) {
+            Write-Err "Invalid IP address: $ip"
+            return $false
+        }
+    }
+    return $true
+}
+
 function Get-Confirmation {
     param(
         [string]$Message,
         [switch]$Dangerous
     )
+
+    if (-not $script:InteractiveMode) {
+        return $true
+    }
 
     if ($Dangerous) {
         Write-Warn "DANGEROUS OPERATION: $Message"
@@ -110,12 +252,14 @@ function Get-Confirmation {
 }
 
 function Pause-ForUser {
-    Write-Host ""
-    Read-Host "Press Enter to continue"
+    if ($script:InteractiveMode) {
+        Write-Host ""
+        Read-Host "Press Enter to continue"
+    }
 }
 
 # ============================================================================
-# Menu Option Functions
+# Original Menu Option Functions
 # ============================================================================
 
 function Show-FirewallStatus {
@@ -301,55 +445,65 @@ function Block-InboundPort {
 }
 
 function Block-OutboundPort {
-    Write-Header "Block Specific Port (Outbound)"
+    param(
+        [int]$PortNum = 0
+    )
 
-    $port = Read-Host "Enter port number to block (1-65535)"
+    if ($script:InteractiveMode -and $PortNum -eq 0) {
+        Write-Header "Block Specific Port (Outbound)"
 
-    if (-not (Test-ValidPort $port)) {
-        Write-Err "Invalid port number. Must be between 1 and 65535."
-        Pause-ForUser
-        return
+        $port = Read-Host "Enter port number to block (1-65535)"
+
+        if (-not (Test-ValidPort $port)) {
+            Write-Err "Invalid port number. Must be between 1 and 65535."
+            Pause-ForUser
+            return
+        }
+
+        $protocol = Read-Host "Enter protocol (TCP/UDP/Any) [default: TCP]"
+        if ([string]::IsNullOrWhiteSpace($protocol)) {
+            $protocol = "TCP"
+        }
+        $protocol = $protocol.ToUpper()
+
+        if ($protocol -notin @("TCP", "UDP", "ANY")) {
+            Write-Err "Invalid protocol. Must be TCP, UDP, or Any."
+            Pause-ForUser
+            return
+        }
+
+        if (-not (Get-Confirmation "Block outbound $protocol port $port?")) {
+            Write-Info "Operation cancelled"
+            Pause-ForUser
+            return
+        }
     }
-
-    $protocol = Read-Host "Enter protocol (TCP/UDP/Any) [default: TCP]"
-    if ([string]::IsNullOrWhiteSpace($protocol)) {
-        $protocol = "TCP"
-    }
-    $protocol = $protocol.ToUpper()
-
-    if ($protocol -notin @("TCP", "UDP", "ANY")) {
-        Write-Err "Invalid protocol. Must be TCP, UDP, or Any."
-        Pause-ForUser
-        return
+    else {
+        $port = $PortNum
+        $protocol = "ANY"
     }
 
     $ruleName = "IR_Block_Outbound_${protocol}_${port}"
 
-    if (-not (Get-Confirmation "Block outbound $protocol port $port?")) {
-        Write-Info "Operation cancelled"
-        Pause-ForUser
-        return
-    }
-
     try {
-        Write-Info "Creating firewall rule to block outbound $protocol port $port..."
+        Write-Info "Creating firewall rule to block outbound port $port..."
 
         if ($protocol -eq "ANY") {
-            netsh advfirewall firewall add rule name="$ruleName" dir=out action=block protocol=tcp localport=$port
-            netsh advfirewall firewall add rule name="${ruleName}_UDP" dir=out action=block protocol=udp localport=$port
+            netsh advfirewall firewall add rule name="${ruleName}_TCP" dir=out action=block protocol=tcp remoteport=$port
+            netsh advfirewall firewall add rule name="${ruleName}_UDP" dir=out action=block protocol=udp remoteport=$port
         }
         else {
-            netsh advfirewall firewall add rule name="$ruleName" dir=out action=block protocol=$protocol localport=$port
+            netsh advfirewall firewall add rule name="$ruleName" dir=out action=block protocol=$protocol remoteport=$port
         }
 
-        Write-Success "Outbound $protocol port $port blocked successfully"
+        Write-Success "Outbound port $port blocked successfully"
         Write-Info "Rule name: $ruleName"
     }
     catch {
         Write-Err "Failed to create rule: $_"
     }
 
-    Pause-ForUser
+    if ($script:InteractiveMode) { Pause-ForUser }
 }
 
 function Block-IPAddress {
@@ -784,6 +938,439 @@ function Show-NetworkAdapters {
 }
 
 # ============================================================================
+# NEW: Combined IP+Port Functions
+# ============================================================================
+
+function Allow-PortFromIP {
+    param(
+        [int]$PortNum = 0,
+        [string]$SourceIP = ""
+    )
+
+    if ($script:InteractiveMode -and $PortNum -eq 0) {
+        Write-Header "Allow Port from Specific IP (Admin Access Control)"
+
+        $port = Read-Host "Enter port number"
+        if (-not (Test-ValidPort $port)) {
+            Write-Err "Invalid port number. Must be between 1 and 65535."
+            Pause-ForUser
+            return
+        }
+
+        $ip = Read-Host "Enter source IP address (e.g., 10.1.2.3 or 10.1.2.0/24)"
+        if (-not (Test-ValidIP $ip)) {
+            Write-Err "Invalid IP address format."
+            Pause-ForUser
+            return
+        }
+
+        if (-not (Get-Confirmation "Allow port $port from IP $ip?")) {
+            Write-Info "Operation cancelled"
+            Pause-ForUser
+            return
+        }
+    }
+    else {
+        $port = $PortNum
+        $ip = $SourceIP
+    }
+
+    $ipSafe = $ip -replace "[\.\/]", "_"
+
+    try {
+        Write-Info "Allowing port $port from IP $ip..."
+
+        # TCP rule
+        $ruleName = "IR_Allow_Port${port}_From_${ipSafe}_TCP"
+        netsh advfirewall firewall add rule name="$ruleName" dir=in action=allow protocol=tcp localport=$port remoteip=$ip
+        Write-Success "Allowed TCP port $port from $ip (Rule: $ruleName)"
+
+        # UDP rule
+        $ruleName = "IR_Allow_Port${port}_From_${ipSafe}_UDP"
+        netsh advfirewall firewall add rule name="$ruleName" dir=in action=allow protocol=udp localport=$port remoteip=$ip
+        Write-Success "Allowed UDP port $port from $ip (Rule: $ruleName)"
+    }
+    catch {
+        Write-Err "Failed to create rule: $_"
+    }
+
+    if ($script:InteractiveMode) { Pause-ForUser }
+}
+
+function Block-PortExceptFromIP {
+    param(
+        [int]$PortNum = 0,
+        [string]$SourceIPs = ""
+    )
+
+    if ($script:InteractiveMode -and $PortNum -eq 0) {
+        Write-Header "Block Port Except from IPs (Whitelist Inbound)"
+
+        $port = Read-Host "Enter port number to restrict"
+        if (-not (Test-ValidPort $port)) {
+            Write-Err "Invalid port number. Must be between 1 and 65535."
+            Pause-ForUser
+            return
+        }
+
+        $ipList = Read-Host "Enter allowed source IPs (comma-separated, e.g., 10.1.2.3,10.1.2.4)"
+        if (-not (Test-ValidIPList $ipList)) {
+            Pause-ForUser
+            return
+        }
+
+        if (-not (Get-Confirmation "Allow port $port only from: $ipList ?")) {
+            Write-Info "Operation cancelled"
+            Pause-ForUser
+            return
+        }
+    }
+    else {
+        $port = $PortNum
+        $ipList = $SourceIPs
+    }
+
+    try {
+        Write-Info "Allowing port $port only from: $ipList"
+        Write-Info "All other sources will be blocked..."
+
+        # First, add ALLOW rules for whitelisted IPs
+        $ips = $ipList -split ","
+        foreach ($ip in $ips) {
+            $ip = $ip.Trim()
+            $ipSafe = $ip -replace "[\.\/]", "_"
+
+            # TCP allow
+            $ruleName = "IR_Whitelist_Port${port}_From_${ipSafe}_TCP"
+            netsh advfirewall firewall add rule name="$ruleName" dir=in action=allow protocol=tcp localport=$port remoteip=$ip
+            Write-Success "Allowed TCP port $port from $ip"
+
+            # UDP allow
+            $ruleName = "IR_Whitelist_Port${port}_From_${ipSafe}_UDP"
+            netsh advfirewall firewall add rule name="$ruleName" dir=in action=allow protocol=udp localport=$port remoteip=$ip
+            Write-Success "Allowed UDP port $port from $ip"
+        }
+
+        # Then, add BLOCK rules for all others
+        $ruleName = "IR_Block_Port${port}_AllOthers_TCP"
+        netsh advfirewall firewall add rule name="$ruleName" dir=in action=block protocol=tcp localport=$port
+        Write-Success "Blocked TCP port $port from all other sources"
+
+        $ruleName = "IR_Block_Port${port}_AllOthers_UDP"
+        netsh advfirewall firewall add rule name="$ruleName" dir=in action=block protocol=udp localport=$port
+        Write-Success "Blocked UDP port $port from all other sources"
+    }
+    catch {
+        Write-Err "Failed to create rules: $_"
+    }
+
+    if ($script:InteractiveMode) { Pause-ForUser }
+}
+
+function Allow-PortToIP {
+    param(
+        [int]$PortNum = 0,
+        [string]$DestIP = ""
+    )
+
+    if ($script:InteractiveMode -and $PortNum -eq 0) {
+        Write-Header "Allow Outbound Port to Specific IP"
+
+        $port = Read-Host "Enter destination port number"
+        if (-not (Test-ValidPort $port)) {
+            Write-Err "Invalid port number. Must be between 1 and 65535."
+            Pause-ForUser
+            return
+        }
+
+        $ip = Read-Host "Enter destination IP address (e.g., 8.8.8.8 or 10.0.0.0/8)"
+        if (-not (Test-ValidIP $ip)) {
+            Write-Err "Invalid IP address format."
+            Pause-ForUser
+            return
+        }
+
+        if (-not (Get-Confirmation "Allow outbound port $port to IP $ip?")) {
+            Write-Info "Operation cancelled"
+            Pause-ForUser
+            return
+        }
+    }
+    else {
+        $port = $PortNum
+        $ip = $DestIP
+    }
+
+    $ipSafe = $ip -replace "[\.\/]", "_"
+
+    try {
+        Write-Info "Allowing outbound port $port to IP $ip..."
+
+        # TCP rule
+        $ruleName = "IR_Allow_OutPort${port}_To_${ipSafe}_TCP"
+        netsh advfirewall firewall add rule name="$ruleName" dir=out action=allow protocol=tcp remoteport=$port remoteip=$ip
+        Write-Success "Allowed outbound TCP port $port to $ip"
+
+        # UDP rule
+        $ruleName = "IR_Allow_OutPort${port}_To_${ipSafe}_UDP"
+        netsh advfirewall firewall add rule name="$ruleName" dir=out action=allow protocol=udp remoteport=$port remoteip=$ip
+        Write-Success "Allowed outbound UDP port $port to $ip"
+    }
+    catch {
+        Write-Err "Failed to create rule: $_"
+    }
+
+    if ($script:InteractiveMode) { Pause-ForUser }
+}
+
+function Block-PortExceptToIP {
+    param(
+        [int]$PortNum = 0,
+        [string]$DestIPs = ""
+    )
+
+    if ($script:InteractiveMode -and $PortNum -eq 0) {
+        Write-Header "Block Outbound Port Except to IPs (Whitelist Outbound)"
+
+        $port = Read-Host "Enter destination port number to restrict"
+        if (-not (Test-ValidPort $port)) {
+            Write-Err "Invalid port number. Must be between 1 and 65535."
+            Pause-ForUser
+            return
+        }
+
+        $ipList = Read-Host "Enter allowed destination IPs (comma-separated, e.g., 8.8.8.8,8.8.4.4)"
+        if (-not (Test-ValidIPList $ipList)) {
+            Pause-ForUser
+            return
+        }
+
+        if (-not (Get-Confirmation "Allow outbound port $port only to: $ipList ?")) {
+            Write-Info "Operation cancelled"
+            Pause-ForUser
+            return
+        }
+    }
+    else {
+        $port = $PortNum
+        $ipList = $DestIPs
+    }
+
+    try {
+        Write-Info "Allowing outbound port $port only to: $ipList"
+        Write-Info "All other destinations will be blocked..."
+
+        # First, add ALLOW rules for whitelisted IPs
+        $ips = $ipList -split ","
+        foreach ($ip in $ips) {
+            $ip = $ip.Trim()
+            $ipSafe = $ip -replace "[\.\/]", "_"
+
+            # TCP allow
+            $ruleName = "IR_Whitelist_OutPort${port}_To_${ipSafe}_TCP"
+            netsh advfirewall firewall add rule name="$ruleName" dir=out action=allow protocol=tcp remoteport=$port remoteip=$ip
+            Write-Success "Allowed outbound TCP port $port to $ip"
+
+            # UDP allow
+            $ruleName = "IR_Whitelist_OutPort${port}_To_${ipSafe}_UDP"
+            netsh advfirewall firewall add rule name="$ruleName" dir=out action=allow protocol=udp remoteport=$port remoteip=$ip
+            Write-Success "Allowed outbound UDP port $port to $ip"
+        }
+
+        # Then, add BLOCK rules for all others
+        $ruleName = "IR_Block_OutPort${port}_AllOthers_TCP"
+        netsh advfirewall firewall add rule name="$ruleName" dir=out action=block protocol=tcp remoteport=$port
+        Write-Success "Blocked outbound TCP port $port to all other destinations"
+
+        $ruleName = "IR_Block_OutPort${port}_AllOthers_UDP"
+        netsh advfirewall firewall add rule name="$ruleName" dir=out action=block protocol=udp remoteport=$port
+        Write-Success "Blocked outbound UDP port $port to all other destinations"
+    }
+    catch {
+        Write-Err "Failed to create rules: $_"
+    }
+
+    if ($script:InteractiveMode) { Pause-ForUser }
+}
+
+# ============================================================================
+# NEW: Service Restriction Functions
+# ============================================================================
+
+function Restrict-OutboundDNS {
+    param(
+        [string]$DNSServers = ""
+    )
+
+    if ($script:InteractiveMode -and [string]::IsNullOrWhiteSpace($DNSServers)) {
+        Write-Header "Restrict Outbound DNS to Approved Resolvers"
+
+        Write-Info "Enter DNS resolver IPs that should be allowed."
+        Write-Info "Common options: 8.8.8.8, 8.8.4.4 (Google), 1.1.1.1 (Cloudflare)"
+        Write-Host ""
+
+        $ipList = Read-Host "Enter allowed DNS server IPs (comma-separated)"
+        if (-not (Test-ValidIPList $ipList)) {
+            Pause-ForUser
+            return
+        }
+
+        if (-not (Get-Confirmation "Restrict DNS to: $ipList ?")) {
+            Write-Info "Operation cancelled"
+            Pause-ForUser
+            return
+        }
+    }
+    else {
+        $ipList = $DNSServers
+    }
+
+    try {
+        Write-Info "Restricting outbound DNS (port 53) to: $ipList"
+        Write-Warn "All other DNS queries will be blocked!"
+
+        # Add ALLOW rules for each DNS server (both UDP and TCP)
+        $ips = $ipList -split ","
+        foreach ($ip in $ips) {
+            $ip = $ip.Trim()
+            $ipSafe = $ip -replace "[\.\/]", "_"
+
+            # UDP DNS
+            $ruleName = "IR_DNS_Allow_${ipSafe}_UDP"
+            netsh advfirewall firewall add rule name="$ruleName" dir=out action=allow protocol=udp remoteport=53 remoteip=$ip
+
+            # TCP DNS
+            $ruleName = "IR_DNS_Allow_${ipSafe}_TCP"
+            netsh advfirewall firewall add rule name="$ruleName" dir=out action=allow protocol=tcp remoteport=53 remoteip=$ip
+
+            Write-Success "Allowed DNS to $ip"
+        }
+
+        # Block all other DNS
+        netsh advfirewall firewall add rule name="IR_DNS_Block_All_UDP" dir=out action=block protocol=udp remoteport=53
+        netsh advfirewall firewall add rule name="IR_DNS_Block_All_TCP" dir=out action=block protocol=tcp remoteport=53
+        Write-Success "Blocked DNS to all other destinations"
+    }
+    catch {
+        Write-Err "Failed to create DNS rules: $_"
+    }
+
+    if ($script:InteractiveMode) { Pause-ForUser }
+}
+
+function Restrict-OutboundSMTP {
+    param(
+        [string]$MailServers = ""
+    )
+
+    if ($script:InteractiveMode -and [string]::IsNullOrWhiteSpace($MailServers)) {
+        Write-Header "Restrict Outbound SMTP to Mail Servers"
+
+        Write-Info "Enter mail server IPs that should be allowed for SMTP."
+        Write-Info "This will restrict ports 25 (SMTP), 465 (SMTPS), and 587 (Submission)."
+        Write-Host ""
+
+        $ipList = Read-Host "Enter allowed mail server IPs (comma-separated)"
+        if (-not (Test-ValidIPList $ipList)) {
+            Pause-ForUser
+            return
+        }
+
+        if (-not (Get-Confirmation "Restrict SMTP to: $ipList ?")) {
+            Write-Info "Operation cancelled"
+            Pause-ForUser
+            return
+        }
+    }
+    else {
+        $ipList = $MailServers
+    }
+
+    $smtpPorts = @(25, 465, 587)
+
+    try {
+        Write-Info "Restricting outbound SMTP (ports 25, 465, 587) to: $ipList"
+        Write-Warn "All other SMTP connections will be blocked!"
+
+        # Add ALLOW rules for each mail server
+        $ips = $ipList -split ","
+        foreach ($ip in $ips) {
+            $ip = $ip.Trim()
+            $ipSafe = $ip -replace "[\.\/]", "_"
+
+            foreach ($port in $smtpPorts) {
+                $ruleName = "IR_SMTP_Allow_${ipSafe}_Port${port}"
+                netsh advfirewall firewall add rule name="$ruleName" dir=out action=allow protocol=tcp remoteport=$port remoteip=$ip
+            }
+            Write-Success "Allowed SMTP to $ip"
+        }
+
+        # Block all other SMTP
+        foreach ($port in $smtpPorts) {
+            netsh advfirewall firewall add rule name="IR_SMTP_Block_All_Port${port}" dir=out action=block protocol=tcp remoteport=$port
+        }
+        Write-Success "Blocked SMTP to all other destinations"
+    }
+    catch {
+        Write-Err "Failed to create SMTP rules: $_"
+    }
+
+    if ($script:InteractiveMode) { Pause-ForUser }
+}
+
+# ============================================================================
+# NEW: Logging Functions
+# ============================================================================
+
+function Enable-FirewallLogging {
+    if ($script:InteractiveMode) {
+        Write-Header "Enable Firewall Logging"
+        Write-Info "This will enable Windows Firewall logging for dropped packets."
+        Write-Host ""
+    }
+
+    try {
+        Write-Info "Enabling Windows Firewall logging..."
+
+        # Enable logging for all profiles
+        netsh advfirewall set allprofiles logging droppedconnections enable
+        netsh advfirewall set allprofiles logging allowedconnections enable
+        netsh advfirewall set allprofiles logging filename "%systemroot%\system32\LogFiles\Firewall\pfirewall.log"
+        netsh advfirewall set allprofiles logging maxfilesize 32767
+
+        Write-Success "Firewall logging enabled."
+        Write-Info "Log file: %systemroot%\system32\LogFiles\Firewall\pfirewall.log"
+        Write-Info "View with: Get-Content `$env:systemroot\system32\LogFiles\Firewall\pfirewall.log -Tail 50"
+    }
+    catch {
+        Write-Err "Failed to enable logging: $_"
+    }
+
+    if ($script:InteractiveMode) { Pause-ForUser }
+}
+
+function Disable-FirewallLogging {
+    if ($script:InteractiveMode) {
+        Write-Header "Disable Firewall Logging"
+        Write-Host ""
+    }
+
+    try {
+        Write-Info "Disabling Windows Firewall logging..."
+
+        netsh advfirewall set allprofiles logging droppedconnections disable
+        netsh advfirewall set allprofiles logging allowedconnections disable
+
+        Write-Success "Firewall logging disabled."
+    }
+    catch {
+        Write-Err "Failed to disable logging: $_"
+    }
+
+    if ($script:InteractiveMode) { Pause-ForUser }
+}
+
+# ============================================================================
 # Main Menu
 # ============================================================================
 
@@ -824,6 +1411,20 @@ function Show-MainMenu {
     Write-MenuOption "15" "Enable network adapter"
     Write-MenuOption "16" "Show network adapters"
     Write-Host ""
+    Write-Host "  ADVANCED ACCESS CONTROL" -ForegroundColor Magenta
+    Write-MenuOption "17" "Allow port from specific IP (admin access)"
+    Write-MenuOption "18" "Block port except from IPs (whitelist inbound)"
+    Write-MenuOption "19" "Allow port to specific IP (outbound control)"
+    Write-MenuOption "20" "Block port except to IPs (whitelist outbound)"
+    Write-Host ""
+    Write-Host "  SERVICE RESTRICTIONS" -ForegroundColor Magenta
+    Write-MenuOption "21" "Restrict outbound DNS to approved resolvers"
+    Write-MenuOption "22" "Restrict outbound SMTP to mail servers"
+    Write-Host ""
+    Write-Host "  LOGGING" -ForegroundColor Magenta
+    Write-MenuOption "23" "Enable firewall logging"
+    Write-MenuOption "24" "Disable firewall logging"
+    Write-Host ""
     Write-MenuOption "0" "Exit"
     Write-Host ""
     Write-Host "  ================================================================" -ForegroundColor Cyan
@@ -838,6 +1439,78 @@ function Main {
         exit 1
     }
 
+    # Check if running in CLI mode
+    if ($PSCmdlet.ParameterSetName -ne 'Interactive') {
+        $script:InteractiveMode = $false
+
+        # Process CLI parameters
+        if ($AllowPortFrom) {
+            if ($Port -eq 0 -or [string]::IsNullOrWhiteSpace($FromIP)) {
+                Write-Err "-AllowPortFrom requires -Port and -FromIP parameters"
+                exit 1
+            }
+            Allow-PortFromIP -PortNum $Port -SourceIP $FromIP
+        }
+        elseif ($BlockPortExceptFrom) {
+            if ($Port -eq 0 -or [string]::IsNullOrWhiteSpace($FromIP)) {
+                Write-Err "-BlockPortExceptFrom requires -Port and -FromIP parameters"
+                exit 1
+            }
+            Block-PortExceptFromIP -PortNum $Port -SourceIPs $FromIP
+        }
+        elseif ($AllowPortTo) {
+            if ($Port -eq 0 -or [string]::IsNullOrWhiteSpace($ToIP)) {
+                Write-Err "-AllowPortTo requires -Port and -ToIP parameters"
+                exit 1
+            }
+            Allow-PortToIP -PortNum $Port -DestIP $ToIP
+        }
+        elseif ($BlockPortExceptTo) {
+            if ($Port -eq 0 -or [string]::IsNullOrWhiteSpace($ToIP)) {
+                Write-Err "-BlockPortExceptTo requires -Port and -ToIP parameters"
+                exit 1
+            }
+            Block-PortExceptToIP -PortNum $Port -DestIPs $ToIP
+        }
+        elseif ($BlockPortIn) {
+            if ($Port -eq 0) {
+                Write-Err "-BlockPortIn requires -Port parameter"
+                exit 1
+            }
+            netsh advfirewall firewall add rule name="IR_Block_Inbound_ANY_$Port" dir=in action=block protocol=tcp localport=$Port
+            netsh advfirewall firewall add rule name="IR_Block_Inbound_ANY_${Port}_UDP" dir=in action=block protocol=udp localport=$Port
+            Write-Success "Blocked inbound port $Port (TCP+UDP)"
+        }
+        elseif ($BlockPortOut) {
+            if ($Port -eq 0) {
+                Write-Err "-BlockPortOut requires -Port parameter"
+                exit 1
+            }
+            Block-OutboundPort -PortNum $Port
+        }
+        elseif (-not [string]::IsNullOrWhiteSpace($RestrictDNS)) {
+            if (-not (Test-ValidIPList $RestrictDNS)) {
+                exit 1
+            }
+            Restrict-OutboundDNS -DNSServers $RestrictDNS
+        }
+        elseif (-not [string]::IsNullOrWhiteSpace($RestrictSMTP)) {
+            if (-not (Test-ValidIPList $RestrictSMTP)) {
+                exit 1
+            }
+            Restrict-OutboundSMTP -MailServers $RestrictSMTP
+        }
+        elseif ($EnableLogging) {
+            Enable-FirewallLogging
+        }
+        elseif ($DisableLogging) {
+            Disable-FirewallLogging
+        }
+
+        exit 0
+    }
+
+    # Interactive mode
     Write-Info "Windows Network Isolation Script initialized"
     Write-Info "Running with Administrator privileges"
     Start-Sleep -Seconds 1
@@ -864,12 +1537,20 @@ function Main {
             "14" { Disable-NetworkAdapter }
             "15" { Enable-NetworkAdapter }
             "16" { Show-NetworkAdapters }
+            "17" { Allow-PortFromIP }
+            "18" { Block-PortExceptFromIP }
+            "19" { Allow-PortToIP }
+            "20" { Block-PortExceptToIP }
+            "21" { Restrict-OutboundDNS }
+            "22" { Restrict-OutboundSMTP }
+            "23" { Enable-FirewallLogging }
+            "24" { Disable-FirewallLogging }
             "0"  {
                 Write-Info "Exiting Network Isolation Script..."
                 exit 0
             }
             default {
-                Write-Err "Invalid option. Please select 0-16."
+                Write-Err "Invalid option. Please select 0-24."
                 Start-Sleep -Seconds 1
             }
         }
