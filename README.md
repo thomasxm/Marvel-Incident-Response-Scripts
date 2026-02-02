@@ -15,7 +15,7 @@ A comprehensive collection of cross-platform scripts for:
 - **Python Scripts** - Enhanced detection with SIEM/Elastic integration
 - **Network Isolation** - Interactive firewall management for containment
 
-Developed by **Medjed** for Security Operations Center (SOC) teams, incident responders, and threat hunters.
+Developed by **Medjed** for Security Operations Centre (SOC) teams, incident responders, and threat hunters.
 
 ---
 
@@ -71,7 +71,7 @@ Enhanced detection capabilities with Elastic/Splunk integration:
 - JSON output for SIEM ingestion
 
 All scripts are designed for **enterprise deployment** with:
-- Colored terminal output for rapid triage
+- Coloured terminal output for rapid triage
 - JSON output for SIEM integration
 - MITRE ATT&CK technique mapping
 - Comprehensive logging and audit trails
@@ -91,7 +91,7 @@ All scripts are designed for **enterprise deployment** with:
 | **Recon Detection** | Identify reconnaissance commands with risk scoring |
 | **Parent-Child Analysis** | Detect suspicious process relationships |
 | **MITRE ATT&CK Mapping** | All detections mapped to ATT&CK techniques |
-| **Colored Output** | Risk-based color coding for rapid triage |
+| **Coloured Output** | Risk-based colour coding for rapid triage |
 | **Cross-Platform** | Matching functionality on Linux and Windows |
 | **Air-Gap Ready** | No network connectivity or package managers required |
 | **SIEM Integration** | JSON output compatible with Elastic, Splunk, etc. |
@@ -858,7 +858,7 @@ This toolkit provides detection coverage for the following ATT&CK techniques:
 | Boot or Logon Autostart Execution | T1547 | `file_anomaly.*` |
 | Server Software Component: Web Shell | T1505.003 | `process_hunter.*` |
 
-### Defense Evasion (TA0005)
+### Defence Evasion (TA0005)
 
 | Technique | ID | Scripts |
 |-----------|----|---------|
@@ -1102,7 +1102,7 @@ Contributions are welcome! Please follow these guidelines:
 Please include:
 - OS version and shell/PowerShell version
 - Steps to reproduce
-- Expected vs actual behavior
+- Expected vs actual behaviour
 - Relevant log output
 
 ---
