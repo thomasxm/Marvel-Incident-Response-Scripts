@@ -32,6 +32,7 @@ Developed by **Medjed** for Security Operations Center (SOC) teams, incident res
   - [File Anomaly Detection](#file-anomaly-detection)
   - [Persistence Anomaly Detection](#persistence-anomaly-detection)
   - [Process Hunter](#process-hunter)
+  - [Sysmon & Event Log Configuration](#sysmon--event-log-configuration)
 - [Network Isolation](#network-isolation)
   - [Linux (iptables)](#linux-iptables)
   - [Linux (UFW)](#linux-ufw)
@@ -111,7 +112,8 @@ marvel-ir-toolkit/
 │   │   ├── process_anomaly.ps1     # Process baseline, anomaly, and recon detection
 │   │   ├── file_anomaly.ps1        # File system monitoring
 │   │   ├── persistence_anomaly.ps1 # Persistence mechanism detection
-│   │   └── process_hunter.ps1      # IOC-based process hunting
+│   │   ├── process_hunter.ps1      # IOC-based process hunting
+│   │   └── sysmon_eventlog_config.ps1  # Sysmon & Event Log configuration for SIEM
 │   └── tests/                      # Comprehensive test suite
 │
 ├── network_isolation/              # Firewall management tools
@@ -442,6 +444,56 @@ Comprehensive persistence mechanism monitoring with multi-level scanning.
 .\persistence_anomaly.ps1 baseline -Level 2 -OutputFile baseline.json
 .\persistence_anomaly.ps1 scan -BaselineFile baseline.json -Level 2
 ```
+
+---
+
+### Sysmon & Event Log Configuration
+
+| Platform | Script |
+|----------|--------|
+| Windows | `native_scripts/windows/sysmon_eventlog_config.ps1` |
+
+Interactive tool for configuring Sysmon and Windows Event Log channels for Elastic Agent/SIEM ingestion.
+
+#### Features
+
+| Feature | Description |
+|---------|-------------|
+| Sysmon Install | Install Sysmon with SwiftOnSecurity config (download or local files) |
+| Sysmon Management | Update, reset, test, or uninstall Sysmon |
+| Event Log Channels | Enable 72+ security-relevant Windows Event Log channels |
+| Channel Tiers | Essential (30), Recommended (17), Server-specific (25) |
+| Event Verification | Generate test events and verify Sysmon captures them |
+| Elastic Export | Export YAML configuration for Elastic Agent policy |
+| Air-Gap Support | Works with local Sysmon.zip and config files |
+
+#### Channel Tiers
+
+| Tier | Channels | Description |
+|------|----------|-------------|
+| Essential | 30 | Core IR & threat hunting (Security, Sysmon, PowerShell, RDP, etc.) |
+| Recommended | 17 | Enhanced detection (WinRM, Kerberos, LSA, DPAPI, etc.) |
+| Server-Specific | 25 | Role-based (DC, DNS, IIS, Hyper-V, PKI, etc.) |
+
+#### Usage
+
+```powershell
+# Interactive mode
+.\sysmon_eventlog_config.ps1
+
+# Non-interactive: Install Sysmon
+.\sysmon_eventlog_config.ps1 -NonInteractive -Action InstallSysmon
+
+# Non-interactive: Enable all essential event logs (200MB max size)
+.\sysmon_eventlog_config.ps1 -NonInteractive -Action EnableLogs -LogSizeMB 200
+
+# Air-gapped install with local files
+.\sysmon_eventlog_config.ps1 -LocalSysmonPath "C:\Tools\Sysmon.zip" -LocalConfigPath "C:\Tools\sysmonconfig.xml"
+```
+
+#### MITRE ATT&CK Coverage
+
+Channels are mapped to ATT&CK techniques including: T1059.001 (PowerShell), T1021.001 (RDP), T1021.002 (SMB), T1053.005 (Scheduled Tasks), T1546.003 (WMI), T1003 (Credential Dumping), T1562.001 (Disable Security Tools), and 50+ more.
 
 ---
 
