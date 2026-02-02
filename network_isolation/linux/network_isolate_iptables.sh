@@ -3,8 +3,26 @@
 # Network Isolation Script using iptables
 # Part of Incident Response Toolkit
 #
-# This script provides an interactive menu for network isolation
+# This script provides an interactive menu and CLI interface for network isolation
 # during incident response activities.
+#
+# Usage:
+#   Interactive mode: sudo ./network_isolate_iptables.sh
+#   CLI mode:         sudo ./network_isolate_iptables.sh [OPTIONS]
+#
+# CLI Options:
+#   --allow-port-from <port> <ip>         Allow port from specific IP
+#   --block-port-except-from <port> <ips> Block port except from IPs (comma-separated)
+#   --allow-port-to <port> <ip>           Allow outbound to port on specific IP
+#   --block-port-except-to <port> <ips>   Block outbound port except to IPs (comma-separated)
+#   --block-port-in <port>                Block inbound port
+#   --block-port-out <port>               Block outbound port
+#   --restrict-dns <ips>                  Restrict outbound DNS to resolvers (comma-separated)
+#   --restrict-smtp <ips>                 Restrict outbound SMTP to mail servers (comma-separated)
+#   --enable-logging                      Enable firewall drop logging
+#   --disable-logging                     Disable firewall drop logging
+#   --save                                Save rules (auto-done after changes)
+#   --help                                Show this help message
 #
 
 set -e
@@ -16,6 +34,10 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+
+# Script mode
+INTERACTIVE_MODE=true
+RULES_CHANGED=false
 
 # ============================================================================
 # Helper Functions
@@ -52,8 +74,47 @@ check_root() {
 }
 
 pause() {
-    echo ""
-    read -rp "Press Enter to continue..."
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        echo ""
+        read -rp "Press Enter to continue..."
+    fi
+}
+
+# ============================================================================
+# Persistence Functions
+# ============================================================================
+
+save_rules() {
+    print_info "Saving iptables rules..."
+
+    # Try different persistence methods
+    if command -v netfilter-persistent &>/dev/null; then
+        netfilter-persistent save
+        print_success "Rules saved using netfilter-persistent"
+    elif [[ -d /etc/iptables ]]; then
+        iptables-save > /etc/iptables/rules.v4
+        print_success "Rules saved to /etc/iptables/rules.v4"
+    elif [[ -f /etc/sysconfig/iptables ]]; then
+        iptables-save > /etc/sysconfig/iptables
+        print_success "Rules saved to /etc/sysconfig/iptables"
+    else
+        # Create directory and save
+        mkdir -p /etc/iptables
+        iptables-save > /etc/iptables/rules.v4
+        print_success "Rules saved to /etc/iptables/rules.v4"
+        print_warning "You may need to configure iptables-persistent for auto-restore on boot"
+    fi
+}
+
+auto_save_if_changed() {
+    if [[ "$RULES_CHANGED" == true ]]; then
+        save_rules
+        RULES_CHANGED=false
+    fi
+}
+
+mark_rules_changed() {
+    RULES_CHANGED=true
 }
 
 # ============================================================================
@@ -104,6 +165,24 @@ validate_ip() {
     fi
 }
 
+validate_ip_list() {
+    local ip_list="$1"
+    if [[ -z "$ip_list" ]]; then
+        print_error "IP list cannot be empty."
+        return 1
+    fi
+
+    IFS=',' read -ra ips <<< "$ip_list"
+    for ip in "${ips[@]}"; do
+        # Trim whitespace
+        ip=$(echo "$ip" | xargs)
+        if ! validate_ip "$ip"; then
+            return 1
+        fi
+    done
+    return 0
+}
+
 validate_interface() {
     local iface="$1"
     if ! ip link show "$iface" &>/dev/null; then
@@ -152,7 +231,7 @@ get_direction() {
 }
 
 # ============================================================================
-# Menu Option Functions
+# Original Menu Option Functions
 # ============================================================================
 
 show_iptables_rules() {
@@ -240,6 +319,8 @@ block_port() {
             ;;
     esac
 
+    mark_rules_changed
+    auto_save_if_changed
     pause
 }
 
@@ -273,6 +354,8 @@ block_ip() {
             ;;
     esac
 
+    mark_rules_changed
+    auto_save_if_changed
     pause
 }
 
@@ -326,6 +409,8 @@ allow_port() {
             ;;
     esac
 
+    mark_rules_changed
+    auto_save_if_changed
     pause
 }
 
@@ -359,6 +444,8 @@ allow_ip() {
             ;;
     esac
 
+    mark_rules_changed
+    auto_save_if_changed
     pause
 }
 
@@ -383,6 +470,8 @@ block_all_incoming() {
         print_success "All incoming traffic is now blocked."
         print_warning "Established connections are still allowed."
         print_warning "Loopback traffic is still allowed."
+        mark_rules_changed
+        auto_save_if_changed
     else
         print_info "Operation cancelled."
     fi
@@ -411,6 +500,8 @@ block_all_outgoing() {
         print_success "All outgoing traffic is now blocked."
         print_warning "Established connections are still allowed."
         print_warning "Loopback traffic is still allowed."
+        mark_rules_changed
+        auto_save_if_changed
     else
         print_info "Operation cancelled."
     fi
@@ -446,6 +537,8 @@ reset_iptables() {
         iptables -t mangle -X
 
         print_success "iptables has been reset. All traffic is now allowed."
+        mark_rules_changed
+        auto_save_if_changed
     else
         print_info "Operation cancelled."
     fi
@@ -523,6 +616,530 @@ show_interfaces() {
 }
 
 # ============================================================================
+# NEW: Combined IP+Port Functions
+# ============================================================================
+
+allow_port_from_ip() {
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        print_header "Allow Port from Specific IP (Admin Access Control)"
+
+        read -rp "Enter port number: " port
+        if ! validate_port "$port"; then
+            pause
+            return
+        fi
+
+        read -rp "Enter source IP address (e.g., 10.1.2.3 or 10.1.2.0/24): " ip
+        if ! validate_ip "$ip"; then
+            pause
+            return
+        fi
+
+        protocol=$(get_protocol)
+    else
+        local port="$1"
+        local ip="$2"
+        local protocol="${3:-tcp}"
+    fi
+
+    echo ""
+    print_info "Allowing port $port from IP $ip ($protocol)..."
+
+    _allow_port_from_ip_cmd() {
+        local proto="$1"
+        iptables -A INPUT -p "$proto" --dport "$port" -s "$ip" -j ACCEPT
+        print_success "Allowed incoming $proto port $port from $ip"
+    }
+
+    case $protocol in
+        tcp) _allow_port_from_ip_cmd "tcp" ;;
+        udp) _allow_port_from_ip_cmd "udp" ;;
+        both)
+            _allow_port_from_ip_cmd "tcp"
+            _allow_port_from_ip_cmd "udp"
+            ;;
+    esac
+
+    mark_rules_changed
+    auto_save_if_changed
+    [[ "$INTERACTIVE_MODE" == true ]] && pause
+}
+
+block_port_except_from() {
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        print_header "Block Port Except from IPs (Whitelist Inbound)"
+
+        read -rp "Enter port number to restrict: " port
+        if ! validate_port "$port"; then
+            pause
+            return
+        fi
+
+        read -rp "Enter allowed source IPs (comma-separated, e.g., 10.1.2.3,10.1.2.4): " ip_list
+        if ! validate_ip_list "$ip_list"; then
+            pause
+            return
+        fi
+
+        protocol=$(get_protocol)
+    else
+        local port="$1"
+        local ip_list="$2"
+        local protocol="${3:-tcp}"
+    fi
+
+    echo ""
+    print_info "Allowing port $port only from: $ip_list ($protocol)"
+    print_info "All other sources will be blocked..."
+
+    _block_port_except_from_cmd() {
+        local proto="$1"
+
+        # First, add ACCEPT rules for whitelisted IPs
+        IFS=',' read -ra ips <<< "$ip_list"
+        for ip in "${ips[@]}"; do
+            ip=$(echo "$ip" | xargs)  # Trim whitespace
+            iptables -A INPUT -p "$proto" --dport "$port" -s "$ip" -j ACCEPT
+            print_success "Allowed $proto port $port from $ip"
+        done
+
+        # Then, add DROP rule for all others
+        iptables -A INPUT -p "$proto" --dport "$port" -j DROP
+        print_success "Blocked $proto port $port from all other sources"
+    }
+
+    case $protocol in
+        tcp) _block_port_except_from_cmd "tcp" ;;
+        udp) _block_port_except_from_cmd "udp" ;;
+        both)
+            _block_port_except_from_cmd "tcp"
+            _block_port_except_from_cmd "udp"
+            ;;
+    esac
+
+    mark_rules_changed
+    auto_save_if_changed
+    [[ "$INTERACTIVE_MODE" == true ]] && pause
+}
+
+allow_port_to_ip() {
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        print_header "Allow Outbound Port to Specific IP"
+
+        read -rp "Enter destination port number: " port
+        if ! validate_port "$port"; then
+            pause
+            return
+        fi
+
+        read -rp "Enter destination IP address (e.g., 8.8.8.8 or 10.0.0.0/8): " ip
+        if ! validate_ip "$ip"; then
+            pause
+            return
+        fi
+
+        protocol=$(get_protocol)
+    else
+        local port="$1"
+        local ip="$2"
+        local protocol="${3:-tcp}"
+    fi
+
+    echo ""
+    print_info "Allowing outbound port $port to IP $ip ($protocol)..."
+
+    _allow_port_to_ip_cmd() {
+        local proto="$1"
+        iptables -A OUTPUT -p "$proto" --dport "$port" -d "$ip" -j ACCEPT
+        print_success "Allowed outgoing $proto port $port to $ip"
+    }
+
+    case $protocol in
+        tcp) _allow_port_to_ip_cmd "tcp" ;;
+        udp) _allow_port_to_ip_cmd "udp" ;;
+        both)
+            _allow_port_to_ip_cmd "tcp"
+            _allow_port_to_ip_cmd "udp"
+            ;;
+    esac
+
+    mark_rules_changed
+    auto_save_if_changed
+    [[ "$INTERACTIVE_MODE" == true ]] && pause
+}
+
+block_port_except_to() {
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        print_header "Block Outbound Port Except to IPs (Whitelist Outbound)"
+
+        read -rp "Enter destination port number to restrict: " port
+        if ! validate_port "$port"; then
+            pause
+            return
+        fi
+
+        read -rp "Enter allowed destination IPs (comma-separated, e.g., 8.8.8.8,8.8.4.4): " ip_list
+        if ! validate_ip_list "$ip_list"; then
+            pause
+            return
+        fi
+
+        protocol=$(get_protocol)
+    else
+        local port="$1"
+        local ip_list="$2"
+        local protocol="${3:-tcp}"
+    fi
+
+    echo ""
+    print_info "Allowing outbound port $port only to: $ip_list ($protocol)"
+    print_info "All other destinations will be blocked..."
+
+    _block_port_except_to_cmd() {
+        local proto="$1"
+
+        # First, add ACCEPT rules for whitelisted IPs
+        IFS=',' read -ra ips <<< "$ip_list"
+        for ip in "${ips[@]}"; do
+            ip=$(echo "$ip" | xargs)  # Trim whitespace
+            iptables -A OUTPUT -p "$proto" --dport "$port" -d "$ip" -j ACCEPT
+            print_success "Allowed outbound $proto port $port to $ip"
+        done
+
+        # Then, add DROP rule for all others
+        iptables -A OUTPUT -p "$proto" --dport "$port" -j DROP
+        print_success "Blocked outbound $proto port $port to all other destinations"
+    }
+
+    case $protocol in
+        tcp) _block_port_except_to_cmd "tcp" ;;
+        udp) _block_port_except_to_cmd "udp" ;;
+        both)
+            _block_port_except_to_cmd "tcp"
+            _block_port_except_to_cmd "udp"
+            ;;
+    esac
+
+    mark_rules_changed
+    auto_save_if_changed
+    [[ "$INTERACTIVE_MODE" == true ]] && pause
+}
+
+# ============================================================================
+# NEW: Service Restriction Functions
+# ============================================================================
+
+restrict_outbound_dns() {
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        print_header "Restrict Outbound DNS to Approved Resolvers"
+
+        print_info "Enter DNS resolver IPs that should be allowed."
+        print_info "Common options: 8.8.8.8, 8.8.4.4 (Google), 1.1.1.1 (Cloudflare)"
+        echo ""
+        read -rp "Enter allowed DNS server IPs (comma-separated): " ip_list
+        if ! validate_ip_list "$ip_list"; then
+            pause
+            return
+        fi
+    else
+        local ip_list="$1"
+    fi
+
+    echo ""
+    print_info "Restricting outbound DNS (port 53) to: $ip_list"
+    print_warning "All other DNS queries will be blocked!"
+
+    # Add ACCEPT rules for each DNS server (both UDP and TCP)
+    IFS=',' read -ra ips <<< "$ip_list"
+    for ip in "${ips[@]}"; do
+        ip=$(echo "$ip" | xargs)  # Trim whitespace
+        iptables -A OUTPUT -p udp --dport 53 -d "$ip" -j ACCEPT
+        iptables -A OUTPUT -p tcp --dport 53 -d "$ip" -j ACCEPT
+        print_success "Allowed DNS to $ip"
+    done
+
+    # Block all other DNS
+    iptables -A OUTPUT -p udp --dport 53 -j DROP
+    iptables -A OUTPUT -p tcp --dport 53 -j DROP
+    print_success "Blocked DNS to all other destinations"
+
+    mark_rules_changed
+    auto_save_if_changed
+    [[ "$INTERACTIVE_MODE" == true ]] && pause
+}
+
+restrict_outbound_smtp() {
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        print_header "Restrict Outbound SMTP to Mail Servers"
+
+        print_info "Enter mail server IPs that should be allowed for SMTP."
+        print_info "This will restrict ports 25 (SMTP), 465 (SMTPS), and 587 (Submission)."
+        echo ""
+        read -rp "Enter allowed mail server IPs (comma-separated): " ip_list
+        if ! validate_ip_list "$ip_list"; then
+            pause
+            return
+        fi
+    else
+        local ip_list="$1"
+    fi
+
+    echo ""
+    print_info "Restricting outbound SMTP (ports 25, 465, 587) to: $ip_list"
+    print_warning "All other SMTP connections will be blocked!"
+
+    # SMTP ports
+    local smtp_ports=(25 465 587)
+
+    # Add ACCEPT rules for each mail server
+    IFS=',' read -ra ips <<< "$ip_list"
+    for ip in "${ips[@]}"; do
+        ip=$(echo "$ip" | xargs)  # Trim whitespace
+        for port in "${smtp_ports[@]}"; do
+            iptables -A OUTPUT -p tcp --dport "$port" -d "$ip" -j ACCEPT
+        done
+        print_success "Allowed SMTP to $ip"
+    done
+
+    # Block all other SMTP
+    for port in "${smtp_ports[@]}"; do
+        iptables -A OUTPUT -p tcp --dport "$port" -j DROP
+    done
+    print_success "Blocked SMTP to all other destinations"
+
+    mark_rules_changed
+    auto_save_if_changed
+    [[ "$INTERACTIVE_MODE" == true ]] && pause
+}
+
+# ============================================================================
+# NEW: Logging Functions
+# ============================================================================
+
+enable_drop_logging() {
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        print_header "Enable Firewall Drop Logging"
+        print_info "This will log all dropped packets to syslog/journald."
+        print_info "Log prefix: IPTABLES_DROPPED"
+        echo ""
+    fi
+
+    # Check if logging rules already exist
+    if iptables -L INPUT -n | grep -q "IPTABLES_DROPPED"; then
+        print_warning "Logging rules already exist. Skipping..."
+        [[ "$INTERACTIVE_MODE" == true ]] && pause
+        return
+    fi
+
+    print_info "Adding logging rules for dropped packets..."
+
+    # Add LOG rules before final DROP (if default policy is DROP)
+    # These log packets that would be dropped
+    iptables -A INPUT -j LOG --log-prefix "IPTABLES_DROPPED_IN: " --log-level 4
+    iptables -A OUTPUT -j LOG --log-prefix "IPTABLES_DROPPED_OUT: " --log-level 4
+    iptables -A FORWARD -j LOG --log-prefix "IPTABLES_DROPPED_FWD: " --log-level 4
+
+    print_success "Firewall logging enabled."
+    print_info "View logs with: journalctl -k | grep IPTABLES_DROPPED"
+    print_info "Or check: /var/log/kern.log or /var/log/messages"
+
+    mark_rules_changed
+    auto_save_if_changed
+    [[ "$INTERACTIVE_MODE" == true ]] && pause
+}
+
+disable_drop_logging() {
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        print_header "Disable Firewall Drop Logging"
+        echo ""
+    fi
+
+    print_info "Removing logging rules..."
+
+    # Remove LOG rules containing our prefix
+    iptables -L INPUT --line-numbers -n | grep "IPTABLES_DROPPED" | awk '{print $1}' | sort -rn | while read -r line_num; do
+        iptables -D INPUT "$line_num" 2>/dev/null || true
+    done
+
+    iptables -L OUTPUT --line-numbers -n | grep "IPTABLES_DROPPED" | awk '{print $1}' | sort -rn | while read -r line_num; do
+        iptables -D OUTPUT "$line_num" 2>/dev/null || true
+    done
+
+    iptables -L FORWARD --line-numbers -n | grep "IPTABLES_DROPPED" | awk '{print $1}' | sort -rn | while read -r line_num; do
+        iptables -D FORWARD "$line_num" 2>/dev/null || true
+    done
+
+    print_success "Firewall logging disabled."
+
+    mark_rules_changed
+    auto_save_if_changed
+    [[ "$INTERACTIVE_MODE" == true ]] && pause
+}
+
+# ============================================================================
+# CLI Argument Parsing
+# ============================================================================
+
+show_help() {
+    cat << 'EOF'
+Network Isolation Script using iptables
+Part of Incident Response Toolkit
+
+Usage:
+  Interactive mode: sudo ./network_isolate_iptables.sh
+  CLI mode:         sudo ./network_isolate_iptables.sh [OPTIONS]
+
+CLI Options:
+  --allow-port-from <port> <ip>         Allow inbound port from specific IP
+  --block-port-except-from <port> <ips> Block inbound port except from IPs (comma-separated)
+  --allow-port-to <port> <ip>           Allow outbound port to specific IP
+  --block-port-except-to <port> <ips>   Block outbound port except to IPs (comma-separated)
+  --block-port-in <port>                Block inbound port (TCP+UDP)
+  --block-port-out <port>               Block outbound port (TCP+UDP)
+  --restrict-dns <ips>                  Restrict outbound DNS to resolvers (comma-separated)
+  --restrict-smtp <ips>                 Restrict outbound SMTP to servers (comma-separated)
+  --enable-logging                      Enable firewall drop logging
+  --disable-logging                     Disable firewall drop logging
+  --save                                Manually save rules
+  --help                                Show this help message
+
+Examples:
+  # Restrict SSH to management IP
+  sudo ./network_isolate_iptables.sh --allow-port-from 22 10.1.2.3
+  sudo ./network_isolate_iptables.sh --block-port-except-from 22 10.1.2.3,10.1.2.4
+
+  # Block outbound SMB and RDP
+  sudo ./network_isolate_iptables.sh --block-port-out 445
+  sudo ./network_isolate_iptables.sh --block-port-out 3389
+
+  # Restrict DNS to approved resolvers
+  sudo ./network_isolate_iptables.sh --restrict-dns 8.8.8.8,8.8.4.4,1.1.1.1
+
+  # Restrict SMTP to mail server
+  sudo ./network_isolate_iptables.sh --restrict-smtp 10.0.0.25
+
+  # Enable logging
+  sudo ./network_isolate_iptables.sh --enable-logging
+
+EOF
+    exit 0
+}
+
+parse_cli_args() {
+    INTERACTIVE_MODE=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h)
+                show_help
+                ;;
+            --allow-port-from)
+                if [[ -z "$2" || -z "$3" ]]; then
+                    print_error "--allow-port-from requires <port> <ip>"
+                    exit 1
+                fi
+                validate_port "$2" || exit 1
+                validate_ip "$3" || exit 1
+                allow_port_from_ip "$2" "$3" "both"
+                shift 3
+                ;;
+            --block-port-except-from)
+                if [[ -z "$2" || -z "$3" ]]; then
+                    print_error "--block-port-except-from requires <port> <ips>"
+                    exit 1
+                fi
+                validate_port "$2" || exit 1
+                validate_ip_list "$3" || exit 1
+                block_port_except_from "$2" "$3" "both"
+                shift 3
+                ;;
+            --allow-port-to)
+                if [[ -z "$2" || -z "$3" ]]; then
+                    print_error "--allow-port-to requires <port> <ip>"
+                    exit 1
+                fi
+                validate_port "$2" || exit 1
+                validate_ip "$3" || exit 1
+                allow_port_to_ip "$2" "$3" "both"
+                shift 3
+                ;;
+            --block-port-except-to)
+                if [[ -z "$2" || -z "$3" ]]; then
+                    print_error "--block-port-except-to requires <port> <ips>"
+                    exit 1
+                fi
+                validate_port "$2" || exit 1
+                validate_ip_list "$3" || exit 1
+                block_port_except_to "$2" "$3" "both"
+                shift 3
+                ;;
+            --block-port-in)
+                if [[ -z "$2" ]]; then
+                    print_error "--block-port-in requires <port>"
+                    exit 1
+                fi
+                validate_port "$2" || exit 1
+                iptables -A INPUT -p tcp --dport "$2" -j DROP
+                iptables -A INPUT -p udp --dport "$2" -j DROP
+                print_success "Blocked inbound port $2 (TCP+UDP)"
+                mark_rules_changed
+                shift 2
+                ;;
+            --block-port-out)
+                if [[ -z "$2" ]]; then
+                    print_error "--block-port-out requires <port>"
+                    exit 1
+                fi
+                validate_port "$2" || exit 1
+                iptables -A OUTPUT -p tcp --dport "$2" -j DROP
+                iptables -A OUTPUT -p udp --dport "$2" -j DROP
+                print_success "Blocked outbound port $2 (TCP+UDP)"
+                mark_rules_changed
+                shift 2
+                ;;
+            --restrict-dns)
+                if [[ -z "$2" ]]; then
+                    print_error "--restrict-dns requires <ips>"
+                    exit 1
+                fi
+                validate_ip_list "$2" || exit 1
+                restrict_outbound_dns "$2"
+                shift 2
+                ;;
+            --restrict-smtp)
+                if [[ -z "$2" ]]; then
+                    print_error "--restrict-smtp requires <ips>"
+                    exit 1
+                fi
+                validate_ip_list "$2" || exit 1
+                restrict_outbound_smtp "$2"
+                shift 2
+                ;;
+            --enable-logging)
+                enable_drop_logging
+                shift
+                ;;
+            --disable-logging)
+                disable_drop_logging
+                shift
+                ;;
+            --save)
+                save_rules
+                shift
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                print_info "Use --help for usage information"
+                exit 1
+                ;;
+        esac
+    done
+
+    # Auto-save at end if rules changed
+    auto_save_if_changed
+}
+
+# ============================================================================
 # Main Menu
 # ============================================================================
 
@@ -540,31 +1157,48 @@ show_menu() {
     echo -e "${BLUE}                           Incident Response Toolkit${NC}"
     echo ""
     echo -e "${YELLOW}=================================================================================${NC}"
-    echo ""
+    echo -e "${GREEN} BASIC OPERATIONS${NC}"
     echo -e "  ${GREEN}1)${NC}  Show current iptables rules"
     echo -e "  ${GREEN}2)${NC}  Show open ports and services"
     echo -e "  ${GREEN}3)${NC}  Block a specific port"
     echo -e "  ${GREEN}4)${NC}  Block a specific IP address"
     echo -e "  ${GREEN}5)${NC}  Allow a specific port"
     echo -e "  ${GREEN}6)${NC}  Allow a specific IP address"
-    echo -e "  ${RED}7)${NC}  Block all incoming traffic (emergency isolation)"
-    echo -e "  ${RED}8)${NC}  Block all outgoing traffic (emergency isolation)"
+    echo ""
+    echo -e "${RED} EMERGENCY ISOLATION${NC}"
+    echo -e "  ${RED}7)${NC}  Block all incoming traffic"
+    echo -e "  ${RED}8)${NC}  Block all outgoing traffic"
     echo -e "  ${YELLOW}9)${NC}  Reset iptables (allow all)"
+    echo ""
+    echo -e "${CYAN} INTERFACE CONTROL${NC}"
     echo -e "  ${RED}10)${NC} Take down network interface"
     echo -e "  ${GREEN}11)${NC} Bring up network interface"
     echo -e "  ${GREEN}12)${NC} Show network interfaces"
+    echo ""
+    echo -e "${BLUE} ADVANCED ACCESS CONTROL${NC}"
+    echo -e "  ${GREEN}13)${NC} Allow port from specific IP (admin access)"
+    echo -e "  ${GREEN}14)${NC} Block port except from IPs (whitelist inbound)"
+    echo -e "  ${GREEN}15)${NC} Allow port to specific IP (outbound control)"
+    echo -e "  ${GREEN}16)${NC} Block port except to IPs (whitelist outbound)"
+    echo ""
+    echo -e "${BLUE} SERVICE RESTRICTIONS${NC}"
+    echo -e "  ${GREEN}17)${NC} Restrict outbound DNS to approved resolvers"
+    echo -e "  ${GREEN}18)${NC} Restrict outbound SMTP to mail servers"
+    echo ""
+    echo -e "${BLUE} LOGGING${NC}"
+    echo -e "  ${GREEN}19)${NC} Enable firewall drop logging"
+    echo -e "  ${YELLOW}20)${NC} Disable firewall drop logging"
+    echo ""
     echo -e "  ${CYAN}0)${NC}  Exit"
     echo ""
     echo -e "${YELLOW}=================================================================================${NC}"
     echo ""
 }
 
-main() {
-    check_root
-
+run_interactive() {
     while true; do
         show_menu
-        read -rp "Enter your choice [0-12]: " choice
+        read -rp "Enter your choice [0-20]: " choice
 
         case $choice in
             1) show_iptables_rules ;;
@@ -579,6 +1213,14 @@ main() {
             10) take_down_interface ;;
             11) bring_up_interface ;;
             12) show_interfaces ;;
+            13) allow_port_from_ip ;;
+            14) block_port_except_from ;;
+            15) allow_port_to_ip ;;
+            16) block_port_except_to ;;
+            17) restrict_outbound_dns ;;
+            18) restrict_outbound_smtp ;;
+            19) enable_drop_logging ;;
+            20) disable_drop_logging ;;
             0)
                 print_info "Exiting Network Isolation Tool."
                 exit 0
@@ -594,5 +1236,18 @@ main() {
 # ============================================================================
 # Entry Point
 # ============================================================================
+
+main() {
+    check_root
+
+    if [[ $# -gt 0 ]]; then
+        # CLI mode
+        parse_cli_args "$@"
+    else
+        # Interactive mode
+        INTERACTIVE_MODE=true
+        run_interactive
+    fi
+}
 
 main "$@"

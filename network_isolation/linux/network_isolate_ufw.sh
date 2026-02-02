@@ -3,8 +3,25 @@
 # Network Isolation Script using UFW (Uncomplicated Firewall)
 # Part of Incident Response Toolkit
 #
-# This script provides an interactive menu for network isolation
+# This script provides an interactive menu and CLI interface for network isolation
 # during incident response activities using UFW.
+#
+# Usage:
+#   Interactive mode: sudo ./network_isolate_ufw.sh
+#   CLI mode:         sudo ./network_isolate_ufw.sh [OPTIONS]
+#
+# CLI Options:
+#   --allow-port-from <port> <ip>         Allow port from specific IP
+#   --block-port-except-from <port> <ips> Block port except from IPs (comma-separated)
+#   --allow-port-to <port> <ip>           Allow outbound to port on specific IP
+#   --block-port-except-to <port> <ips>   Block outbound port except to IPs (comma-separated)
+#   --block-port-in <port>                Block inbound port
+#   --block-port-out <port>               Block outbound port
+#   --restrict-dns <ips>                  Restrict outbound DNS to resolvers (comma-separated)
+#   --restrict-smtp <ips>                 Restrict outbound SMTP to mail servers (comma-separated)
+#   --enable-logging                      Enable firewall logging
+#   --disable-logging                     Disable firewall logging
+#   --help                                Show this help message
 #
 
 set -e
@@ -16,6 +33,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+
+# Script mode
+INTERACTIVE_MODE=true
 
 # ============================================================================
 # Helper Functions
@@ -60,8 +80,10 @@ check_ufw() {
 }
 
 pause() {
-    echo ""
-    read -rp "Press Enter to continue..."
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        echo ""
+        read -rp "Press Enter to continue..."
+    fi
 }
 
 confirm_action() {
@@ -125,6 +147,24 @@ validate_ip() {
     fi
 }
 
+validate_ip_list() {
+    local ip_list="$1"
+    if [[ -z "$ip_list" ]]; then
+        print_error "IP list cannot be empty."
+        return 1
+    fi
+
+    IFS=',' read -ra ips <<< "$ip_list"
+    for ip in "${ips[@]}"; do
+        # Trim whitespace
+        ip=$(echo "$ip" | xargs)
+        if ! validate_ip "$ip"; then
+            return 1
+        fi
+    done
+    return 0
+}
+
 validate_interface() {
     local iface="$1"
     if ! ip link show "$iface" &>/dev/null; then
@@ -182,7 +222,7 @@ get_direction() {
 }
 
 # ============================================================================
-# Menu Option Functions
+# Original Menu Option Functions
 # ============================================================================
 
 show_ufw_status() {
@@ -544,6 +584,518 @@ bring_up_interface() {
     pause
 }
 
+show_interfaces() {
+    print_header "Network Interfaces"
+
+    print_info "Interface summary:"
+    echo ""
+    ip -br link show
+
+    echo ""
+    print_info "Detailed interface information:"
+    echo ""
+    ip -br addr show
+
+    echo ""
+    print_info "Routing table:"
+    echo ""
+    ip route show
+
+    pause
+}
+
+# ============================================================================
+# NEW: Combined IP+Port Functions
+# ============================================================================
+
+allow_port_from_ip() {
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        print_header "Allow Port from Specific IP (Admin Access Control)"
+
+        read -rp "Enter port number: " port
+        if ! validate_port "$port"; then
+            pause
+            return
+        fi
+
+        read -rp "Enter source IP address (e.g., 10.1.2.3 or 10.1.2.0/24): " ip
+        if ! validate_ip "$ip"; then
+            pause
+            return
+        fi
+
+        protocol=$(get_protocol)
+    else
+        local port="$1"
+        local ip="$2"
+        local protocol="${3:-tcp}"
+    fi
+
+    echo ""
+    print_info "Allowing port $port from IP $ip ($protocol)..."
+
+    _allow_port_from_ip_cmd() {
+        local proto="$1"
+        ufw allow from "$ip" to any port "$port" proto "$proto"
+        print_success "Allowed incoming $proto port $port from $ip"
+    }
+
+    case $protocol in
+        tcp) _allow_port_from_ip_cmd "tcp" ;;
+        udp) _allow_port_from_ip_cmd "udp" ;;
+        both)
+            _allow_port_from_ip_cmd "tcp"
+            _allow_port_from_ip_cmd "udp"
+            ;;
+    esac
+
+    [[ "$INTERACTIVE_MODE" == true ]] && pause
+}
+
+block_port_except_from() {
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        print_header "Block Port Except from IPs (Whitelist Inbound)"
+
+        read -rp "Enter port number to restrict: " port
+        if ! validate_port "$port"; then
+            pause
+            return
+        fi
+
+        read -rp "Enter allowed source IPs (comma-separated, e.g., 10.1.2.3,10.1.2.4): " ip_list
+        if ! validate_ip_list "$ip_list"; then
+            pause
+            return
+        fi
+
+        protocol=$(get_protocol)
+    else
+        local port="$1"
+        local ip_list="$2"
+        local protocol="${3:-tcp}"
+    fi
+
+    echo ""
+    print_info "Allowing port $port only from: $ip_list ($protocol)"
+    print_info "All other sources will be blocked..."
+
+    _block_port_except_from_cmd() {
+        local proto="$1"
+
+        # First, add ALLOW rules for whitelisted IPs
+        IFS=',' read -ra ips <<< "$ip_list"
+        for ip in "${ips[@]}"; do
+            ip=$(echo "$ip" | xargs)  # Trim whitespace
+            ufw allow from "$ip" to any port "$port" proto "$proto"
+            print_success "Allowed $proto port $port from $ip"
+        done
+
+        # Then, add DENY rule for all others
+        ufw deny in proto "$proto" to any port "$port"
+        print_success "Blocked $proto port $port from all other sources"
+    }
+
+    case $protocol in
+        tcp) _block_port_except_from_cmd "tcp" ;;
+        udp) _block_port_except_from_cmd "udp" ;;
+        both)
+            _block_port_except_from_cmd "tcp"
+            _block_port_except_from_cmd "udp"
+            ;;
+    esac
+
+    [[ "$INTERACTIVE_MODE" == true ]] && pause
+}
+
+allow_port_to_ip() {
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        print_header "Allow Outbound Port to Specific IP"
+
+        read -rp "Enter destination port number: " port
+        if ! validate_port "$port"; then
+            pause
+            return
+        fi
+
+        read -rp "Enter destination IP address (e.g., 8.8.8.8 or 10.0.0.0/8): " ip
+        if ! validate_ip "$ip"; then
+            pause
+            return
+        fi
+
+        protocol=$(get_protocol)
+    else
+        local port="$1"
+        local ip="$2"
+        local protocol="${3:-tcp}"
+    fi
+
+    echo ""
+    print_info "Allowing outbound port $port to IP $ip ($protocol)..."
+
+    _allow_port_to_ip_cmd() {
+        local proto="$1"
+        ufw allow out to "$ip" port "$port" proto "$proto"
+        print_success "Allowed outgoing $proto port $port to $ip"
+    }
+
+    case $protocol in
+        tcp) _allow_port_to_ip_cmd "tcp" ;;
+        udp) _allow_port_to_ip_cmd "udp" ;;
+        both)
+            _allow_port_to_ip_cmd "tcp"
+            _allow_port_to_ip_cmd "udp"
+            ;;
+    esac
+
+    [[ "$INTERACTIVE_MODE" == true ]] && pause
+}
+
+block_port_except_to() {
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        print_header "Block Outbound Port Except to IPs (Whitelist Outbound)"
+
+        read -rp "Enter destination port number to restrict: " port
+        if ! validate_port "$port"; then
+            pause
+            return
+        fi
+
+        read -rp "Enter allowed destination IPs (comma-separated, e.g., 8.8.8.8,8.8.4.4): " ip_list
+        if ! validate_ip_list "$ip_list"; then
+            pause
+            return
+        fi
+
+        protocol=$(get_protocol)
+    else
+        local port="$1"
+        local ip_list="$2"
+        local protocol="${3:-tcp}"
+    fi
+
+    echo ""
+    print_info "Allowing outbound port $port only to: $ip_list ($protocol)"
+    print_info "All other destinations will be blocked..."
+
+    _block_port_except_to_cmd() {
+        local proto="$1"
+
+        # First, add ALLOW rules for whitelisted IPs
+        IFS=',' read -ra ips <<< "$ip_list"
+        for ip in "${ips[@]}"; do
+            ip=$(echo "$ip" | xargs)  # Trim whitespace
+            ufw allow out to "$ip" port "$port" proto "$proto"
+            print_success "Allowed outbound $proto port $port to $ip"
+        done
+
+        # Then, add DENY rule for all others
+        ufw deny out proto "$proto" to any port "$port"
+        print_success "Blocked outbound $proto port $port to all other destinations"
+    }
+
+    case $protocol in
+        tcp) _block_port_except_to_cmd "tcp" ;;
+        udp) _block_port_except_to_cmd "udp" ;;
+        both)
+            _block_port_except_to_cmd "tcp"
+            _block_port_except_to_cmd "udp"
+            ;;
+    esac
+
+    [[ "$INTERACTIVE_MODE" == true ]] && pause
+}
+
+# ============================================================================
+# NEW: Service Restriction Functions
+# ============================================================================
+
+restrict_outbound_dns() {
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        print_header "Restrict Outbound DNS to Approved Resolvers"
+
+        print_info "Enter DNS resolver IPs that should be allowed."
+        print_info "Common options: 8.8.8.8, 8.8.4.4 (Google), 1.1.1.1 (Cloudflare)"
+        echo ""
+        read -rp "Enter allowed DNS server IPs (comma-separated): " ip_list
+        if ! validate_ip_list "$ip_list"; then
+            pause
+            return
+        fi
+    else
+        local ip_list="$1"
+    fi
+
+    echo ""
+    print_info "Restricting outbound DNS (port 53) to: $ip_list"
+    print_warning "All other DNS queries will be blocked!"
+
+    # Add ALLOW rules for each DNS server (both UDP and TCP)
+    IFS=',' read -ra ips <<< "$ip_list"
+    for ip in "${ips[@]}"; do
+        ip=$(echo "$ip" | xargs)  # Trim whitespace
+        ufw allow out to "$ip" port 53 proto udp
+        ufw allow out to "$ip" port 53 proto tcp
+        print_success "Allowed DNS to $ip"
+    done
+
+    # Block all other DNS
+    ufw deny out proto udp to any port 53
+    ufw deny out proto tcp to any port 53
+    print_success "Blocked DNS to all other destinations"
+
+    [[ "$INTERACTIVE_MODE" == true ]] && pause
+}
+
+restrict_outbound_smtp() {
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        print_header "Restrict Outbound SMTP to Mail Servers"
+
+        print_info "Enter mail server IPs that should be allowed for SMTP."
+        print_info "This will restrict ports 25 (SMTP), 465 (SMTPS), and 587 (Submission)."
+        echo ""
+        read -rp "Enter allowed mail server IPs (comma-separated): " ip_list
+        if ! validate_ip_list "$ip_list"; then
+            pause
+            return
+        fi
+    else
+        local ip_list="$1"
+    fi
+
+    echo ""
+    print_info "Restricting outbound SMTP (ports 25, 465, 587) to: $ip_list"
+    print_warning "All other SMTP connections will be blocked!"
+
+    # SMTP ports
+    local smtp_ports=(25 465 587)
+
+    # Add ALLOW rules for each mail server
+    IFS=',' read -ra ips <<< "$ip_list"
+    for ip in "${ips[@]}"; do
+        ip=$(echo "$ip" | xargs)  # Trim whitespace
+        for port in "${smtp_ports[@]}"; do
+            ufw allow out to "$ip" port "$port" proto tcp
+        done
+        print_success "Allowed SMTP to $ip"
+    done
+
+    # Block all other SMTP
+    for port in "${smtp_ports[@]}"; do
+        ufw deny out proto tcp to any port "$port"
+    done
+    print_success "Blocked SMTP to all other destinations"
+
+    [[ "$INTERACTIVE_MODE" == true ]] && pause
+}
+
+# ============================================================================
+# NEW: Logging Functions
+# ============================================================================
+
+enable_drop_logging() {
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        print_header "Enable Firewall Logging"
+        print_info "This will enable UFW logging for blocked connections."
+        echo ""
+    fi
+
+    print_info "Enabling UFW logging..."
+    ufw logging on
+    ufw logging medium
+
+    print_success "Firewall logging enabled (medium level)."
+    print_info "View logs with: journalctl -k | grep UFW"
+    print_info "Or check: /var/log/ufw.log"
+
+    [[ "$INTERACTIVE_MODE" == true ]] && pause
+}
+
+disable_drop_logging() {
+    if [[ "$INTERACTIVE_MODE" == true ]]; then
+        print_header "Disable Firewall Logging"
+        echo ""
+    fi
+
+    print_info "Disabling UFW logging..."
+    ufw logging off
+
+    print_success "Firewall logging disabled."
+
+    [[ "$INTERACTIVE_MODE" == true ]] && pause
+}
+
+# ============================================================================
+# CLI Argument Parsing
+# ============================================================================
+
+show_help() {
+    cat << 'EOF'
+Network Isolation Script using UFW
+Part of Incident Response Toolkit
+
+Usage:
+  Interactive mode: sudo ./network_isolate_ufw.sh
+  CLI mode:         sudo ./network_isolate_ufw.sh [OPTIONS]
+
+CLI Options:
+  --allow-port-from <port> <ip>         Allow inbound port from specific IP
+  --block-port-except-from <port> <ips> Block inbound port except from IPs (comma-separated)
+  --allow-port-to <port> <ip>           Allow outbound port to specific IP
+  --block-port-except-to <port> <ips>   Block outbound port except to IPs (comma-separated)
+  --block-port-in <port>                Block inbound port (TCP+UDP)
+  --block-port-out <port>               Block outbound port (TCP+UDP)
+  --restrict-dns <ips>                  Restrict outbound DNS to resolvers (comma-separated)
+  --restrict-smtp <ips>                 Restrict outbound SMTP to servers (comma-separated)
+  --enable-logging                      Enable firewall logging
+  --disable-logging                     Disable firewall logging
+  --default-deny-in                     Set default deny incoming
+  --default-deny-out                    Set default deny outgoing
+  --enable                              Enable UFW
+  --help                                Show this help message
+
+Examples:
+  # Restrict SSH to management IP
+  sudo ./network_isolate_ufw.sh --allow-port-from 22 10.1.2.3
+  sudo ./network_isolate_ufw.sh --block-port-except-from 22 10.1.2.3,10.1.2.4
+
+  # Block outbound SMB and RDP
+  sudo ./network_isolate_ufw.sh --block-port-out 445
+  sudo ./network_isolate_ufw.sh --block-port-out 3389
+
+  # Restrict DNS to approved resolvers
+  sudo ./network_isolate_ufw.sh --restrict-dns 8.8.8.8,8.8.4.4,1.1.1.1
+
+  # Restrict SMTP to mail server
+  sudo ./network_isolate_ufw.sh --restrict-smtp 10.0.0.25
+
+  # Enable logging and default deny
+  sudo ./network_isolate_ufw.sh --enable-logging --default-deny-in --enable
+
+EOF
+    exit 0
+}
+
+parse_cli_args() {
+    INTERACTIVE_MODE=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h)
+                show_help
+                ;;
+            --allow-port-from)
+                if [[ -z "$2" || -z "$3" ]]; then
+                    print_error "--allow-port-from requires <port> <ip>"
+                    exit 1
+                fi
+                validate_port "$2" || exit 1
+                validate_ip "$3" || exit 1
+                allow_port_from_ip "$2" "$3" "both"
+                shift 3
+                ;;
+            --block-port-except-from)
+                if [[ -z "$2" || -z "$3" ]]; then
+                    print_error "--block-port-except-from requires <port> <ips>"
+                    exit 1
+                fi
+                validate_port "$2" || exit 1
+                validate_ip_list "$3" || exit 1
+                block_port_except_from "$2" "$3" "both"
+                shift 3
+                ;;
+            --allow-port-to)
+                if [[ -z "$2" || -z "$3" ]]; then
+                    print_error "--allow-port-to requires <port> <ip>"
+                    exit 1
+                fi
+                validate_port "$2" || exit 1
+                validate_ip "$3" || exit 1
+                allow_port_to_ip "$2" "$3" "both"
+                shift 3
+                ;;
+            --block-port-except-to)
+                if [[ -z "$2" || -z "$3" ]]; then
+                    print_error "--block-port-except-to requires <port> <ips>"
+                    exit 1
+                fi
+                validate_port "$2" || exit 1
+                validate_ip_list "$3" || exit 1
+                block_port_except_to "$2" "$3" "both"
+                shift 3
+                ;;
+            --block-port-in)
+                if [[ -z "$2" ]]; then
+                    print_error "--block-port-in requires <port>"
+                    exit 1
+                fi
+                validate_port "$2" || exit 1
+                ufw deny in proto tcp to any port "$2"
+                ufw deny in proto udp to any port "$2"
+                print_success "Blocked inbound port $2 (TCP+UDP)"
+                shift 2
+                ;;
+            --block-port-out)
+                if [[ -z "$2" ]]; then
+                    print_error "--block-port-out requires <port>"
+                    exit 1
+                fi
+                validate_port "$2" || exit 1
+                ufw deny out proto tcp to any port "$2"
+                ufw deny out proto udp to any port "$2"
+                print_success "Blocked outbound port $2 (TCP+UDP)"
+                shift 2
+                ;;
+            --restrict-dns)
+                if [[ -z "$2" ]]; then
+                    print_error "--restrict-dns requires <ips>"
+                    exit 1
+                fi
+                validate_ip_list "$2" || exit 1
+                restrict_outbound_dns "$2"
+                shift 2
+                ;;
+            --restrict-smtp)
+                if [[ -z "$2" ]]; then
+                    print_error "--restrict-smtp requires <ips>"
+                    exit 1
+                fi
+                validate_ip_list "$2" || exit 1
+                restrict_outbound_smtp "$2"
+                shift 2
+                ;;
+            --enable-logging)
+                enable_drop_logging
+                shift
+                ;;
+            --disable-logging)
+                disable_drop_logging
+                shift
+                ;;
+            --default-deny-in)
+                ufw default deny incoming
+                print_success "Default incoming policy set to DENY"
+                shift
+                ;;
+            --default-deny-out)
+                ufw default deny outgoing
+                print_success "Default outgoing policy set to DENY"
+                shift
+                ;;
+            --enable)
+                ufw --force enable
+                print_success "UFW enabled"
+                shift
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                print_info "Use --help for usage information"
+                exit 1
+                ;;
+        esac
+    done
+}
+
 # ============================================================================
 # Main Menu
 # ============================================================================
@@ -562,7 +1114,7 @@ show_menu() {
     echo -e "${BLUE}                           Incident Response Toolkit${NC}"
     echo ""
     echo -e "${YELLOW}=================================================================================${NC}"
-    echo ""
+    echo -e "${GREEN} BASIC OPERATIONS${NC}"
     echo -e "  ${GREEN}1)${NC}  Show UFW status and rules"
     echo -e "  ${GREEN}2)${NC}  Show open ports and services (ss)"
     echo -e "  ${GREEN}3)${NC}  Enable UFW"
@@ -573,23 +1125,40 @@ show_menu() {
     echo -e "  ${GREEN}8)${NC}  Allow a specific IP address"
     echo -e "  ${YELLOW}9)${NC}  Delete a rule (by number)"
     echo -e "  ${RED}10)${NC} Reset UFW (remove all rules)"
+    echo ""
+    echo -e "${RED} EMERGENCY ISOLATION${NC}"
     echo -e "  ${RED}11)${NC} Enable default deny incoming"
     echo -e "  ${RED}12)${NC} Enable default deny outgoing"
+    echo ""
+    echo -e "${CYAN} INTERFACE CONTROL${NC}"
     echo -e "  ${RED}13)${NC} Take down network interface"
     echo -e "  ${GREEN}14)${NC} Bring up network interface"
+    echo -e "  ${GREEN}15)${NC} Show network interfaces"
+    echo ""
+    echo -e "${BLUE} ADVANCED ACCESS CONTROL${NC}"
+    echo -e "  ${GREEN}16)${NC} Allow port from specific IP (admin access)"
+    echo -e "  ${GREEN}17)${NC} Block port except from IPs (whitelist inbound)"
+    echo -e "  ${GREEN}18)${NC} Allow port to specific IP (outbound control)"
+    echo -e "  ${GREEN}19)${NC} Block port except to IPs (whitelist outbound)"
+    echo ""
+    echo -e "${BLUE} SERVICE RESTRICTIONS${NC}"
+    echo -e "  ${GREEN}20)${NC} Restrict outbound DNS to approved resolvers"
+    echo -e "  ${GREEN}21)${NC} Restrict outbound SMTP to mail servers"
+    echo ""
+    echo -e "${BLUE} LOGGING${NC}"
+    echo -e "  ${GREEN}22)${NC} Enable firewall logging"
+    echo -e "  ${YELLOW}23)${NC} Disable firewall logging"
+    echo ""
     echo -e "  ${CYAN}0)${NC}  Exit"
     echo ""
     echo -e "${YELLOW}=================================================================================${NC}"
     echo ""
 }
 
-main() {
-    check_root
-    check_ufw
-
+run_interactive() {
     while true; do
         show_menu
-        read -rp "Enter your choice [0-14]: " choice
+        read -rp "Enter your choice [0-23]: " choice
 
         case $choice in
             1) show_ufw_status ;;
@@ -606,6 +1175,15 @@ main() {
             12) default_deny_outgoing ;;
             13) take_down_interface ;;
             14) bring_up_interface ;;
+            15) show_interfaces ;;
+            16) allow_port_from_ip ;;
+            17) block_port_except_from ;;
+            18) allow_port_to_ip ;;
+            19) block_port_except_to ;;
+            20) restrict_outbound_dns ;;
+            21) restrict_outbound_smtp ;;
+            22) enable_drop_logging ;;
+            23) disable_drop_logging ;;
             0)
                 print_info "Exiting UFW Network Isolation Tool."
                 exit 0
@@ -621,5 +1199,19 @@ main() {
 # ============================================================================
 # Entry Point
 # ============================================================================
+
+main() {
+    check_root
+    check_ufw
+
+    if [[ $# -gt 0 ]]; then
+        # CLI mode
+        parse_cli_args "$@"
+    else
+        # Interactive mode
+        INTERACTIVE_MODE=true
+        run_interactive
+    fi
+}
 
 main "$@"

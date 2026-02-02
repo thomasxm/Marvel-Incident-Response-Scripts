@@ -85,7 +85,8 @@ All scripts are designed for **enterprise deployment** with:
 | **Baseline Comparison** | Create and compare system state over time |
 | **Hash Verification** | SHA256 hashing for executable integrity checking |
 | **Persistence Detection** | Monitor cron, systemd, Run keys, scheduled tasks, and 20+ persistence mechanisms |
-| **Network Isolation** | Interactive firewall tools for rapid containment (iptables, UFW, Windows Firewall) |
+| **Network Isolation** | Interactive firewall tools for rapid containment (iptables, UFW, Windows Firewall) with CLI automation |
+| **Enterprise Hardening** | IP+port whitelist rules, DNS/SMTP restriction, firewall logging |
 | **Recon Detection** | Identify reconnaissance commands with risk scoring |
 | **Parent-Child Analysis** | Detect suspicious process relationships |
 | **MITRE ATT&CK Mapping** | All detections mapped to ATT&CK techniques |
@@ -115,10 +116,10 @@ marvel-ir-toolkit/
 │
 ├── network_isolation/              # Firewall management tools
 │   ├── linux/
-│   │   ├── network_isolate_iptables.sh  # iptables-based isolation
-│   │   └── network_isolate_ufw.sh       # UFW-based isolation
+│   │   ├── network_isolate_iptables.sh  # iptables-based isolation (CLI + interactive)
+│   │   └── network_isolate_ufw.sh       # UFW-based isolation (CLI + interactive)
 │   └── windows/
-│       └── network_isolate.ps1          # Windows Firewall management
+│       └── network_isolate.ps1          # Windows Firewall management (CLI + interactive)
 │
 ├── ir_scripts/                     # Python-based IR scripts
 │   ├── process_hunter.py           # Advanced process hunting
@@ -126,7 +127,18 @@ marvel-ir-toolkit/
 │   ├── file_anomaly.py             # File anomaly detection
 │   └── utils/                      # Shared utilities
 │
-└── tests/                          # Python test suite
+├── tests/                          # Test suites
+│   ├── test_network_isolation_linux.py   # Linux firewall unit tests (41 tests)
+│   ├── test_network_isolation_windows.py # Windows firewall unit tests (90 tests)
+│   └── integration/
+│       ├── linux/
+│       │   ├── test_iptables_integration.sh  # iptables integration tests
+│       │   └── test_ufw_integration.sh       # UFW integration tests
+│       └── windows/
+│           └── test_firewall_integration.ps1 # Windows Firewall integration tests
+│
+└── docs/
+    └── plans/                      # Design documents
 ```
 
 ---
@@ -435,68 +447,152 @@ Comprehensive persistence mechanism monitoring with multi-level scanning.
 
 ## Network Isolation
 
-Interactive firewall management tools for rapid network containment during incident response.
+Interactive firewall management tools for rapid network containment during incident response. All scripts support both **interactive menu mode** and **CLI automation** for scripting and orchestration.
+
+### Features Overview
+
+| Feature | Description | Linux CLI | Windows CLI |
+|---------|-------------|-----------|-------------|
+| **View Rules** | Show current firewall rules | Interactive | Interactive |
+| **Block/Allow Ports** | Block or allow specific ports | `--block-port-in/out` | `-BlockPortIn/Out` |
+| **Block/Allow IPs** | Block or allow IP addresses/CIDR | Interactive | Interactive |
+| **Allow Port from IP** | Restrict port access to specific source IPs | `--allow-port-from` | `-AllowPortFrom` |
+| **Whitelist Inbound** | Allow port only from specific IPs | `--block-port-except-from` | `-BlockPortExceptFrom` |
+| **Allow Port to IP** | Allow outbound to specific destinations | `--allow-port-to` | `-AllowPortTo` |
+| **Whitelist Outbound** | Allow outbound port only to specific IPs | `--block-port-except-to` | `-BlockPortExceptTo` |
+| **Restrict DNS** | Allow DNS only to approved resolvers | `--restrict-dns` | `-RestrictDNS` |
+| **Restrict SMTP** | Allow SMTP only to mail servers | `--restrict-smtp` | `-RestrictSMTP` |
+| **Firewall Logging** | Enable/disable drop logging | `--enable/disable-logging` | `-EnableLogging` |
+| **Emergency Isolation** | Block all incoming/outgoing traffic | Interactive | Interactive |
+| **Interface Control** | Take down or bring up network interfaces | Interactive | Interactive |
+| **Auto-Persistence** | Rules automatically saved after changes | Automatic | Automatic |
 
 ### Linux (iptables)
 
 **Script:** `network_isolation/linux/network_isolate_iptables.sh`
 
-Interactive menu-driven iptables management for incident response.
+Interactive menu-driven and CLI-capable iptables management for incident response.
 
-#### Features
-
-| Feature | Description |
-|---------|-------------|
-| View Rules | Show current iptables rules with line numbers |
-| Block/Allow Ports | Block or allow specific ports (TCP/UDP) |
-| Block/Allow IPs | Block or allow specific IP addresses or CIDR ranges |
-| Emergency Isolation | Block all incoming or outgoing traffic |
-| Interface Control | Take down or bring up network interfaces |
-| Reset | Reset iptables to allow all traffic |
-
-#### Usage
+#### Interactive Mode
 
 ```bash
 sudo ./network_isolation/linux/network_isolate_iptables.sh
+```
+
+#### CLI Mode Examples
+
+```bash
+# Restrict SSH (port 22) to management IP only
+sudo ./network_isolate_iptables.sh --allow-port-from 22 10.1.2.3
+sudo ./network_isolate_iptables.sh --block-port-except-from 22 10.1.2.3,10.1.2.4
+
+# Block outbound SMB and RDP (lateral movement prevention)
+sudo ./network_isolate_iptables.sh --block-port-out 445
+sudo ./network_isolate_iptables.sh --block-port-out 3389
+
+# Restrict DNS to approved resolvers only
+sudo ./network_isolate_iptables.sh --restrict-dns 8.8.8.8,8.8.4.4,1.1.1.1
+
+# Restrict SMTP to authorized mail servers
+sudo ./network_isolate_iptables.sh --restrict-smtp 10.0.0.25,10.0.0.26
+
+# Enable firewall drop logging
+sudo ./network_isolate_iptables.sh --enable-logging
+
+# View help
+sudo ./network_isolate_iptables.sh --help
+```
+
+#### Menu Options
+
+```
+  FIREWALL STATUS
+  [1]  Show current iptables rules
+  [2]  Show open ports and services
+
+  BASIC RULES
+  [3]  Block a specific port
+  [4]  Block a specific IP address
+  [5]  Allow a specific port
+  [6]  Allow a specific IP address
+
+  EMERGENCY ISOLATION
+  [7]  Block all incoming traffic
+  [8]  Block all outgoing traffic
+  [9]  Reset iptables (allow all)
+
+  NETWORK INTERFACES
+  [10] Take down network interface
+  [11] Bring up network interface
+  [12] Show network interfaces
+
+  ADVANCED ACCESS CONTROL
+  [13] Allow port from specific IP (admin access)
+  [14] Block port except from IPs (whitelist inbound)
+  [15] Allow port to specific IP (outbound control)
+  [16] Block port except to IPs (whitelist outbound)
+
+  SERVICE RESTRICTIONS
+  [17] Restrict outbound DNS to approved resolvers
+  [18] Restrict outbound SMTP to mail servers
+
+  LOGGING
+  [19] Enable firewall drop logging
+  [20] Disable firewall drop logging
+
+  [0]  Exit
 ```
 
 ### Linux (UFW)
 
 **Script:** `network_isolation/linux/network_isolate_ufw.sh`
 
-UFW-based alternative for systems using Uncomplicated Firewall.
+UFW-based alternative with identical features and CLI flags.
 
-#### Usage
+#### CLI Mode Examples
 
 ```bash
-sudo ./network_isolation/linux/network_isolate_ufw.sh
+# Same CLI flags as iptables version
+sudo ./network_isolate_ufw.sh --block-port-except-from 22 10.1.2.3
+sudo ./network_isolate_ufw.sh --restrict-dns 8.8.8.8,8.8.4.4
+sudo ./network_isolate_ufw.sh --enable-logging
 ```
 
 ### Windows Firewall
 
 **Script:** `network_isolation/windows/network_isolate.ps1`
 
-Interactive Windows Firewall management with netsh.
+Interactive and CLI-capable Windows Firewall management with netsh.
 
-#### Features
-
-| Feature | Description |
-|---------|-------------|
-| Firewall Status | View all profile states and settings |
-| Block/Allow Ports | Create inbound/outbound port rules |
-| Block/Allow IPs | Block or allow specific IP addresses |
-| Emergency Isolation | Block all inbound/outbound (emergency containment) |
-| Adapter Control | Disable/enable network adapters |
-| Reset | Reset firewall to Windows defaults |
-
-#### Usage
+#### Interactive Mode
 
 ```powershell
 # Run as Administrator
 .\network_isolation\windows\network_isolate.ps1
 ```
 
-#### Sample Menu
+#### CLI Mode Examples
+
+```powershell
+# Restrict RDP (port 3389) to management IP only
+.\network_isolate.ps1 -AllowPortFrom -Port 3389 -FromIP 10.1.2.3
+.\network_isolate.ps1 -BlockPortExceptFrom -Port 3389 -FromIP "10.1.2.3,10.1.2.4"
+
+# Block outbound SMB and RDP
+.\network_isolate.ps1 -BlockPortOut -Port 445
+.\network_isolate.ps1 -BlockPortOut -Port 3389
+
+# Restrict DNS to approved resolvers
+.\network_isolate.ps1 -RestrictDNS "8.8.8.8,8.8.4.4,1.1.1.1"
+
+# Restrict SMTP to mail servers
+.\network_isolate.ps1 -RestrictSMTP "10.0.0.25,10.0.0.26"
+
+# Enable firewall logging
+.\network_isolate.ps1 -EnableLogging
+```
+
+#### Menu Options
 
 ```
   ================================================================
@@ -504,18 +600,107 @@ Interactive Windows Firewall management with netsh.
   ================================================================
 
   FIREWALL STATUS
-  [1] Show firewall status and profiles
-  [2] Show open ports and connections
+  [1]  Show firewall status and profiles
+  [2]  Show open ports and connections
+
+  FIREWALL CONTROL
+  [3]  Enable Windows Firewall (all profiles)
+  [4]  Disable Windows Firewall (all profiles)
 
   BLOCK RULES
-  [5] Block a specific port (inbound)
-  [6] Block a specific port (outbound)
-  [7] Block a specific IP address
+  [5]  Block a specific port (inbound)
+  [6]  Block a specific port (outbound)
+  [7]  Block a specific IP address
+
+  ALLOW RULES
+  [8]  Allow a specific port
+  [9]  Allow a specific IP address
+
+  RULE MANAGEMENT
+  [10] Delete a firewall rule
 
   EMERGENCY ISOLATION
   [11] Block all inbound (emergency isolation)
   [12] Block all outbound (emergency isolation)
+  [13] Reset firewall to defaults
+
+  NETWORK ADAPTERS
+  [14] Disable network adapter
+  [15] Enable network adapter
+  [16] Show network adapters
+
+  ADVANCED ACCESS CONTROL
+  [17] Allow port from specific IP (admin access)
+  [18] Block port except from IPs (whitelist inbound)
+  [19] Allow port to specific IP (outbound control)
+  [20] Block port except to IPs (whitelist outbound)
+
+  SERVICE RESTRICTIONS
+  [21] Restrict outbound DNS to approved resolvers
+  [22] Restrict outbound SMTP to mail servers
+
+  LOGGING
+  [23] Enable firewall logging
+  [24] Disable firewall logging
+
+  [0]  Exit
 ```
+
+### Enterprise Hardening Scenarios
+
+Common enterprise hardening patterns supported by the network isolation scripts:
+
+#### 1. Restrict Admin Access to Management IPs
+
+```bash
+# Linux: Allow SSH only from management network
+sudo ./network_isolate_iptables.sh --block-port-except-from 22 10.1.2.0/24
+
+# Windows: Allow RDP only from jump servers
+.\network_isolate.ps1 -BlockPortExceptFrom -Port 3389 -FromIP "10.1.2.3,10.1.2.4"
+```
+
+#### 2. Block Lateral Movement
+
+```bash
+# Block outbound SMB (port 445) and RDP (port 3389)
+sudo ./network_isolate_iptables.sh --block-port-out 445
+sudo ./network_isolate_iptables.sh --block-port-out 3389
+
+# Windows equivalent
+.\network_isolate.ps1 -BlockPortOut -Port 445
+.\network_isolate.ps1 -BlockPortOut -Port 3389
+```
+
+#### 3. Restrict DNS to Prevent Data Exfiltration
+
+```bash
+# Only allow DNS to corporate resolvers
+sudo ./network_isolate_iptables.sh --restrict-dns 10.0.0.53,10.0.0.54
+
+# Windows equivalent
+.\network_isolate.ps1 -RestrictDNS "10.0.0.53,10.0.0.54"
+```
+
+#### 4. Enable Forensic Logging
+
+```bash
+# Enable logging of dropped packets for forensic analysis
+sudo ./network_isolate_iptables.sh --enable-logging
+
+# Windows: Logs to %systemroot%\system32\LogFiles\Firewall\pfirewall.log
+.\network_isolate.ps1 -EnableLogging
+```
+
+### Rule Naming Convention
+
+All rules created by the scripts use an `IR_` prefix for easy identification and bulk management:
+
+- `IR_Allow_Port22_From_10_1_2_3_TCP` - Allow SSH from specific IP
+- `IR_Block_Port22_AllOthers_TCP` - Block SSH from other sources
+- `IR_DNS_Allow_8_8_8_8_UDP` - Allow DNS to Google resolver
+- `IR_DNS_Block_All_UDP` - Block DNS to other destinations
+- `IR_Block_Outbound_ANY_445_TCP` - Block outbound SMB
 
 ---
 
@@ -698,7 +883,53 @@ sudo ./network_isolation/linux/network_isolate_iptables.sh
 # Block all outbound, allow specific forensic IP
 ```
 
-### 7. Persistence Mechanism Audit
+### 7. Enterprise Hardening (CLI Automation)
+
+```bash
+# Complete hardening script for Linux servers
+#!/bin/bash
+SCRIPT="./network_isolation/linux/network_isolate_iptables.sh"
+MGMT_IPS="10.1.2.3,10.1.2.4"
+DNS_SERVERS="10.0.0.53,10.0.0.54"
+MAIL_SERVER="10.0.0.25"
+
+# Restrict SSH to management IPs only
+sudo $SCRIPT --block-port-except-from 22 $MGMT_IPS
+
+# Block lateral movement
+sudo $SCRIPT --block-port-out 445   # SMB
+sudo $SCRIPT --block-port-out 3389  # RDP
+
+# Restrict DNS to corporate resolvers
+sudo $SCRIPT --restrict-dns $DNS_SERVERS
+
+# Restrict SMTP to mail relay
+sudo $SCRIPT --restrict-smtp $MAIL_SERVER
+
+# Enable logging for forensics
+sudo $SCRIPT --enable-logging
+```
+
+```powershell
+# Complete hardening script for Windows servers
+$MgmtIPs = "10.1.2.3,10.1.2.4"
+$DNSServers = "10.0.0.53,10.0.0.54"
+
+# Restrict RDP to management IPs only
+.\network_isolate.ps1 -BlockPortExceptFrom -Port 3389 -FromIP $MgmtIPs
+
+# Block lateral movement
+.\network_isolate.ps1 -BlockPortOut -Port 445
+.\network_isolate.ps1 -BlockPortOut -Port 3389
+
+# Restrict DNS to corporate resolvers
+.\network_isolate.ps1 -RestrictDNS $DNSServers
+
+# Enable logging
+.\network_isolate.ps1 -EnableLogging
+```
+
+### 8. Persistence Mechanism Audit
 
 ```bash
 # Linux - Full persistence scan
@@ -722,9 +953,11 @@ The toolkit includes a comprehensive test suite with unit tests, integration tes
 cd native_scripts/tests
 ./run_all_tests.sh
 
-# Python tests
-cd tests
-pytest
+# Python tests (including network isolation unit tests)
+pytest tests/
+
+# Network isolation unit tests only
+pytest tests/test_network_isolation_linux.py tests/test_network_isolation_windows.py -v
 ```
 
 ### Run Specific Test Suites
@@ -741,7 +974,41 @@ pwsh -File ./native_scripts/tests/powershell/Test-AllScripts.ps1
 
 # Python tests
 pytest tests/
+
+# Network isolation Linux unit tests (41 tests)
+pytest tests/test_network_isolation_linux.py -v
+
+# Network isolation Windows unit tests (90 tests)
+pytest tests/test_network_isolation_windows.py -v
 ```
+
+### Network Isolation Integration Tests
+
+Integration tests that actually apply firewall rules (requires root/admin):
+
+```bash
+# Linux iptables integration tests (requires root)
+sudo ./tests/integration/linux/test_iptables_integration.sh
+
+# Linux UFW integration tests (requires root)
+sudo ./tests/integration/linux/test_ufw_integration.sh
+
+# Windows integration tests (requires Administrator)
+.\tests\integration\windows\test_firewall_integration.ps1
+```
+
+### Network Isolation Test Coverage
+
+| Test Category | Tests | Coverage |
+|---------------|-------|----------|
+| IP Validation | 19 | IPv4, CIDR /0-/32, invalid octets, format errors |
+| Port Validation | 6 | Valid (1-65535), boundary values, invalid inputs |
+| Command Injection Prevention | 2 | Malicious IP/port inputs rejected |
+| Command Generation | 7 | iptables, UFW, netsh command patterns |
+| Rule Ordering | 2 | ACCEPT before DROP for whitelists |
+| CLI Parsing | 3 | Flag combinations, missing arguments |
+| Enterprise Scenarios | 5 | SSH restriction, SMB/RDP blocking, DNS/SMTP restriction |
+| Edge Cases | 14 | Whitespace, duplicates, large lists, special chars |
 
 ### Test Fixtures
 
